@@ -91,6 +91,7 @@ namespace ShiftDesk
         public int AbloesungStunden = 1;   // Posten wechseln alle X Stunden (ab Mitternacht gerechnet)
         public int StuendlichVon;          // in diesem Zeitfenster wird trotzdem jede Stunde abgelöst (von == bis: kein Fenster)
         public int StuendlichBis;
+        public bool Zweierteams;           // je zwei Personen mit gleicher Funktion und Gruppe sind immer zusammen eingeteilt
         public int DraussenMaxStunden = 2; // höchstens so viele Stunden am Stück auf Posten im Freien (0 = keine Grenze)
         public List<Funktion> Funktionen = new List<Funktion>();
         public List<string> Grade = new List<string>();
@@ -170,6 +171,7 @@ namespace ShiftDesk
             k.Start = DateTime.Today;
             k.Ende = DateTime.Today.AddDays(1);
             k.Grade = StandardGrade.ToList();
+            k.Zweierteams = true;
 
             k.Funktionen.Add(new Funktion { Name = "Wacht Kdt" });
             k.Funktionen.Add(new Funktion { Name = "Wacht Kdt Stv" });

@@ -15,6 +15,7 @@ namespace ShiftDesk
         public int Stunden;
         public List<Person> Zeilen = new List<Person>();
         public int[] Block;       // Zeilen mit gleichen erlaubten Posten bilden einen Block (Abstand im Plan)
+        public int[] Team;        // Zeilen mit gleicher Nummer bilden ein festes Team und sind immer zusammen eingeteilt
         public int[,] Z;          // [Zeile, Stunde] -> Postenindex, FREI oder RUHE
         public bool[,] Essen;     // [Zeile, Stunde] -> isst in dieser Stunde
         public List<Person> NichtEingeteilt = new List<Person>();
@@ -92,6 +93,18 @@ namespace ShiftDesk
             plan.Block = new int[plan.Zeilen.Count];
             for (int r = 1; r < plan.Zeilen.Count; r++)
                 plan.Block[r] = plan.Block[r - 1] + (schluessel(plan.Zeilen[r]) == schluessel(plan.Zeilen[r - 1]) ? 0 : 1);
+
+            // Zweierteams: je zwei aufeinanderfolgende Zeilen mit gleicher Funktion und Gruppe (die Liste ist
+            // danach sortiert, die Reihenfolge innerhalb bestimmt die Personen-Tabelle); wer übrig bleibt, ist allein
+            plan.Team = new int[plan.Zeilen.Count];
+            for (int r = 0, team = 0; r < plan.Zeilen.Count; team++)
+            {
+                plan.Team[r] = team;
+                if (cfg.Zweierteams && r + 1 < plan.Zeilen.Count
+                    && plan.Zeilen[r + 1].Funktion == plan.Zeilen[r].Funktion && plan.Zeilen[r + 1].Gruppe == plan.Zeilen[r].Gruppe)
+                    plan.Team[++r] = team;
+                r++;
+            }
 
             plan.Z = new int[plan.Zeilen.Count, plan.Stunden];
             plan.Essen = new bool[plan.Zeilen.Count, plan.Stunden];
@@ -240,22 +253,40 @@ namespace ShiftDesk
         // Teilt die verfügbaren Personen einer Stunde den Posten zu (Ungarische Methode).
         // Spalten: zu besetzende Plätze + je ein «Rest»-Platz pro Person (Auffangposten oder frei).
         // Zusätzliche Leer-Zeilen erlauben es, Plätze unbesetzt zu lassen, wenn Leute fehlen.
+        // Zugeteilt werden Einheiten: ein Zweierteam, dessen beide Mitglieder verfügbar sind, zählt als eine Einheit
+        // der Grösse 2 und braucht auf dem Posten einen Doppelplatz; alle anderen sind Einheiten der Grösse 1.
         void Zuteilen(int t, int h, List<int> zeilen, Dictionary<int, List<int>> unterbesetzt, bool fortsetzen)
         {
+            var einheiten = new List<int[]>();
+            var offen = new HashSet<int>(zeilen);
+            foreach (int r in zeilen)
+            {
+                if (!offen.Remove(r)) continue;
+                int partner = offen.FirstOrDefault(x => plan.Team[x] == plan.Team[r]);
+                if (offen.Contains(partner) && plan.Team[partner] == plan.Team[r] && offen.Remove(partner))
+                    einheiten.Add(new[] { r, partner });
+                else
+                    einheiten.Add(new[] { r });
+            }
+            bool teams = einheiten.Any(e => e.Length == 2);
+
+            // Plätze: Posten k mit Grösse g (2 = Doppelplatz für ein Team, 1 = Einzelplatz)
             var plaetze = new List<int>();
+            var groesse = new List<int>();
             for (int k = 0; k < cfg.Posten.Count; k++)
             {
                 var p = cfg.Posten[k];
-                if (p.Typ != PostenTyp.Auffang && p.OffenUm(h))
-                    for (int i = 0; i < p.Anzahl; i++)
-                        plaetze.Add(k);
+                if (p.Typ == PostenTyp.Auffang || !p.OffenUm(h)) continue;
+                int doppel = teams ? p.Anzahl / 2 : 0;
+                for (int i = 0; i < doppel; i++) { plaetze.Add(k); groesse.Add(2); }
+                for (int i = 0; i < p.Anzahl - 2 * doppel; i++) { plaetze.Add(k); groesse.Add(1); }
             }
 
             // Mitten in einer Ablösung (fortsetzen) bleibt jeder auf seinem Posten: das Bleiben ist in den Kosten
             // so stark belohnt, dass nur zwei Dinge einen Wechsel auslösen: wer auf dem Auffangposten sitzt, rückt
             // auf einen frei gewordenen Platz nach, und wer draussen die erlaubte Zeit erreicht hat, tauscht mit
             // jemandem von drinnen (Gesunderhaltung geht vor).
-            int n = zeilen.Count, m = plaetze.Count, N = n + m;
+            int n = einheiten.Count, m = plaetze.Count, N = n + m;
             if (N == 0) return;
 
             // Durchschnitt pro Posten unter den Personen, die ihn besetzen dürfen
@@ -265,17 +296,19 @@ namespace ShiftDesk
                 var erlaubt = zeilen.Where(r => cfg.Posten[k].Erlaubt(plan.Zeilen[r].Funktion)).ToList();
                 schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
             }
-            var rest = zeilen.Select(r => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && p.Erlaubt(plan.Zeilen[r].Funktion))).ToArray();
+            Func<int[], Posten, bool> erlaubtFuer = (e, p) => e.All(r => p.Erlaubt(plan.Zeilen[r].Funktion));
+            var rest = einheiten.Select(e => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && erlaubtFuer(e, p))).ToArray();
+            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen));
 
             var kosten = new double[N, N];
             for (int i = 0; i < N; i++)
                 for (int j = 0; j < N; j++)
                 {
                     if (i < n && j < m)
-                        kosten[i, j] = cfg.Posten[plaetze[j]].Erlaubt(plan.Zeilen[zeilen[i]].Funktion)
-                            ? Kosten(zeilen[i], plaetze[j], t, schnitt, fortsetzen) : SPERRE;
+                        kosten[i, j] = groesse[j] == einheiten[i].Length && erlaubtFuer(einheiten[i], cfg.Posten[plaetze[j]])
+                            ? kostenEinheit(einheiten[i], plaetze[j]) : SPERRE;
                     else if (i < n)
-                        kosten[i, j] = Kosten(zeilen[i], rest[i], t, schnitt, fortsetzen);
+                        kosten[i, j] = kostenEinheit(einheiten[i], rest[i]);
                     else if (j < m)
                         kosten[i, j] = LEER + (m - j) * 100;  // wichtigere Posten (weiter oben) immer zuerst besetzen
                     else
@@ -289,8 +322,11 @@ namespace ShiftDesk
                 int j = wahl[i];
                 int k = j < m ? plaetze[j] : rest[i];
                 if (j < m) besetzt[j] = true;
-                plan.Z[zeilen[i], t] = k;
-                if (k >= 0) anzahl[zeilen[i], k]++;
+                foreach (int r in einheiten[i])
+                {
+                    plan.Z[r, t] = k;
+                    if (k >= 0) anzahl[r, k]++;
+                }
             }
             for (int j = 0; j < m; j++)
             {

@@ -100,7 +100,8 @@ namespace ShiftDesk
                         var p = plan.Zeilen[r];
                         g.DrawString(p.Grad, fName, tGrau, new RectangleF(b.Left, zy, gradW, zeileH), links);
                         g.DrawString(p.Name, fName, tText, new RectangleF(b.Left + gradW, zy, nameW - 4 * u, zeileH), links);
-                        if (r < n - 1 && plan.Block[r + 1] == plan.Block[r])
+                        // Trennlinie zwischen den Zeilen; Mitglieder eines festen Teams bleiben ohne Linie zusammen
+                        if (r < n - 1 && plan.Block[r + 1] == plan.Block[r] && plan.Team[r + 1] != plan.Team[r])
                             g.DrawLine(linie, b.Left, zy + zeileH, xs - spalt, zy + zeileH);
                         for (int c = 0; c < stunden; c++)
                         {

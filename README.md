@@ -13,6 +13,9 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 - **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
   «Draussen» (Posten im Freien, im Plan mit Schneeflocke) und «Am Stück» (gleiche Person bleibt möglichst
   lange); die Reihenfolge ist die Wichtigkeit
+- **Feste Zweierteams** (wahlweise): je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe
+  sind immer zusammen auf dem gleichen Posten; Posten mit 2 Personen bekommen ein Team, einzelne Plätze eine
+  Einzelperson
 - **Gesunderhaltung**: niemand ist länger als eingestellt (z. B. 2 Stunden) am Stück draussen; bei längeren
   Ablöseblöcken tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis
 - **Essenszeiten**: jede Person, die das ganze Fenster im Dienst ist, bekommt eine Essensstunde auf einem

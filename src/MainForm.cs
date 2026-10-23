@@ -52,11 +52,12 @@ namespace ShiftDesk
         Panel seitePersonen, seitePlan;
         Eingabefeld txtName;
         DatumFeld dtStart, dtEnde;
-        AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis;
+        AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis, teams;
         static readonly string[] AbloesungListe = { "Jede Stunde", "Alle 2 Stunden", "Alle 3 Stunden", "Alle 4 Stunden" };
         // Index = erlaubte Stunden am Stück draussen, 0 = keine Grenze
         static readonly string[] DraussenListe = { "Keine Grenze", "Höchstens 1 Stunde", "Höchstens 2 Stunden", "Höchstens 3 Stunden", "Höchstens 4 Stunden", "Höchstens 6 Stunden" };
         static readonly int[] DraussenStunden = { 0, 1, 2, 3, 4, 6 };
+        static readonly string[] TeamListe = { "Keine festen Teams", "Feste Zweierteams" };
         ZoomPanel vorschau;
         Label lblZoom;
         ModernButton btnEinpassen;
@@ -356,7 +357,7 @@ namespace ShiftDesk
             Zeilenknoepfe(gridPersonen, true);
             Bearbeitbar(gridPersonen);
             return NeueSeite("Personen",
-                "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. Zum Ändern einfach ins Feld klicken.",
+                "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird; die Reihenfolge änderst du mit den Pfeilen.",
                 KarteMit(gridPersonen),
                 Knopf("Person hinzufügen", "plus", NeuePerson, true));
         }
@@ -434,6 +435,8 @@ namespace ShiftDesk
             felder.Controls.Add(Feld("bis", stuendlichBis));
             draussen = new AuswahlFeld(DraussenListe) { Width = Theme.S(190) };
             felder.Controls.Add(Feld("Am Stück draussen", draussen));
+            teams = new AuswahlFeld(TeamListe) { Width = Theme.S(190) };
+            felder.Controls.Add(Feld("Teams", teams));
             var einstellungen = KarteMit(felder);
             einstellungen.Dock = DockStyle.Top;
             einstellungen.Padding = new Padding(Theme.S(18), Theme.S(14), Theme.S(18), Theme.S(10));
@@ -534,7 +537,7 @@ namespace ShiftDesk
             koerper.Controls.Add(einstellungen);
 
             return NeueSeite("Plan",
-                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
+                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. «Feste Zweierteams»: je zwei Personen (Reihenfolge der Personen-Tabelle) sind immer zusammen auf dem gleichen Posten. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
                 koerper,
                 Knopf("Drucken", "printer", Drucken),
                 Knopf("Als PDF", "file-down", AlsPdf),
@@ -945,6 +948,7 @@ namespace ShiftDesk
             abloesung.Index = Math.Min(AbloesungListe.Length, Math.Max(1, k.AbloesungStunden)) - 1;
             stuendlichVon.Index = Math.Max(0, Math.Min(23, k.StuendlichVon));
             stuendlichBis.Index = Math.Max(0, Math.Min(23, k.StuendlichBis));
+            teams.Index = k.Zweierteams ? 1 : 0;
             int d = Array.IndexOf(DraussenStunden, k.DraussenMaxStunden);
             if (d < 0) d = k.DraussenMaxStunden <= 0 ? 0 : DraussenStunden.Length - 1;
             draussen.Index = d;
@@ -983,6 +987,7 @@ namespace ShiftDesk
                 AbloesungStunden = abloesung.Index + 1,
                 StuendlichVon = stuendlichVon.Index,
                 StuendlichBis = stuendlichBis.Index,
+                Zweierteams = teams.Index == 1,
                 DraussenMaxStunden = DraussenStunden[draussen.Index],
             };
             foreach (var r in Zeilen(gridFunktionen))
