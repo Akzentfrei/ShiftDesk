@@ -173,6 +173,13 @@ namespace ShiftDesk
                     HashSet<int> gesehen;
                     if (!essenGesehen.TryGetValue(essenSchluessel, out gesehen))
                         essenGesehen[essenSchluessel] = gesehen = new HashSet<int>();
+                    // Wer zur Essenszeit in Ruhe ist, isst dort: in der ersten Ruhestunde des Fensters eintragen
+                    for (int r = 0; r < n; r++)
+                        if (plan.Z[r, t] == Plan.RUHE && gegessen[r] != essenSchluessel)
+                        {
+                            plan.Essen[r, t] = true;
+                            gegessen[r] = essenSchluessel;
+                        }
                     foreach (int r in zeilen.Where(r => kannEssen[r] && BrauchtEssen(r, t)))
                     {
                         gesehen.Add(r);

@@ -414,7 +414,7 @@ namespace ShiftDesk
             Zeilenknoepfe(gridEssen, false);
             Bearbeitbar(gridEssen);
             return NeueSeite("Essenszeiten",
-                "In jedem Zeitfenster bekommt jede Person im Dienst eine Stunde zum Essen, auf einem Posten mit «Essen möglich». Im Plan ist diese Stunde mit dem Besteck markiert.",
+                "In jedem Zeitfenster bekommt jede Person im Dienst eine Stunde zum Essen, auf einem Posten mit «Essen möglich». Wer zur Essenszeit in Ruhe ist, isst in der Ruhezeit. Im Plan ist diese Stunde mit dem Besteck markiert.",
                 KarteMit(gridEssen),
                 Knopf("Mahlzeit hinzufügen", "plus", () => Hinzufuegen(gridEssen, "", Zeit.Text(11), Zeit.Text(13)), true));
         }

@@ -142,6 +142,12 @@ namespace ShiftDesk
                         r0 = r1 + 1;
                     }
 
+                    // Essen in der Ruhezeit (zur festgelegten Essenszeit)
+                    for (int r = 0; r < n; r++)
+                        for (int c = 0; c < stunden; c++)
+                            if (plan.Z[r, erste + c] == Plan.RUHE && plan.Essen[r, erste + c])
+                                EssenSymbol(g, new RectangleF(spalteX(c) + spalt / 2, zeileY(r) + spalt / 2, spalteW - spalt, zeileH - spalt));
+
                     // Tageswechsel
                     using (var tag = new Pen(HellGrau, u * 1.2f))
                         for (int c = 1; c < stunden; c++)

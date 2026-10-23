@@ -244,7 +244,8 @@ namespace ShiftDesk
                 for (int t = 0; t < plan.Stunden; t++)
                 {
                     int k = plan.Z[r, t];
-                    if (k == Plan.RUHE) z.Leer(ErsteStundenSpalte + t, sRuhe);
+                    if (k == Plan.RUHE && plan.Essen[r, t]) z.Text(ErsteStundenSpalte + t, "🍴", sRuhe);
+                    else if (k == Plan.RUHE) z.Leer(ErsteStundenSpalte + t, sRuhe);
                     else if (k < 0) z.Leer(ErsteStundenSpalte + t, sFrei);
                     else z.Text(ErsteStundenSpalte + t, cfg.Posten[k].Name + (plan.Essen[r, t] ? " 🍴" : ""), sErsterPosten + k);
                 }
