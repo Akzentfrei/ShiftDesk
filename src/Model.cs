@@ -7,8 +7,9 @@ using System.Xml.Serialization;
 
 namespace ShiftDesk
 {
-    // Wachtkdt gibt es nur noch, damit ältere Dateien gelesen werden können
-    public enum PostenTyp { Normal, Wachtkdt, Auffang }
+    // Wachtkdt gibt es nur noch, damit ältere Dateien gelesen werden können.
+    // Fahrer: nur für Fahrer (z. B. Presto), und Fahrer sind nur auf solchen Posten oder in Ruhe.
+    public enum PostenTyp { Normal, Wachtkdt, Auffang, Fahrer }
 
     public class Funktion
     {
@@ -22,6 +23,7 @@ namespace ShiftDesk
         public string Name = "";
         public string Funktion = "";
         public string Gruppe = "";
+        public bool Fahrer;   // nur auf Posten vom Typ Fahrer oder in Ruhe, im Plan mit Auto markiert
     }
 
     // Eine Gruppe ruht jeden Tag im selben Zeitfenster (RuheVon bis RuheBis, Stunden 0-23).
@@ -78,6 +80,45 @@ namespace ShiftDesk
         public static readonly string[] StandardGrade =
             { "Rekr", "Sdt", "Gfr", "Obgfr", "Kpl", "Wm", "Obwm", "Fw", "Four", "Hptfw", "Adj Uof", "Lt", "Oblt", "Hptm" };
 
+        // Diese Posten gibt es in jeder Datei; sie werden ergänzt, wenn sie fehlen, und lassen sich nicht löschen
+        public static readonly string[] Pflichtposten = { "Wacht Kdt", "Presto", "Subito" };
+
+        public static bool IstPflichtposten(string name)
+        {
+            return Pflichtposten.Any(p => string.Equals(p, (name ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        public void PflichtpostenErgaenzen()
+        {
+            for (int i = 0; i < Pflichtposten.Length; i++)
+            {
+                string name = Pflichtposten[i];
+                if (Posten.Any(p => string.Equals(p.Name.Trim(), name, StringComparison.OrdinalIgnoreCase))) continue;
+                Posten neu;
+                switch (i)
+                {
+                    case 0:
+                        neu = new Posten { Name = name, Farbe = Color.FromArgb(79, 173, 234).ToArgb(), Anzahl = 1, AmStueck = true,
+                            Funktionen = Funktionen.Where(f => f.Name.IndexOf("Kdt", StringComparison.OrdinalIgnoreCase) >= 0).Select(f => f.Name).ToList() };
+                        break;
+                    case 1:
+                        neu = new Posten { Name = name, Farbe = Color.FromArgb(234, 88, 12).ToArgb(), Anzahl = 2, Typ = PostenTyp.Fahrer, EssenMoeglich = true };
+                        break;
+                    default:
+                        neu = new Posten { Name = name, Farbe = Color.FromArgb(13, 148, 136).ToArgb(), Anzahl = 2, EssenMoeglich = true };
+                        break;
+                }
+                Posten.Insert(Math.Min(i, Posten.Count), neu);
+            }
+        }
+
+        public static Konfiguration Neu()
+        {
+            var k = new Konfiguration { Start = DateTime.Today, Ende = DateTime.Today.AddDays(1) };
+            k.PflichtpostenErgaenzen();
+            return k;
+        }
+
         // Dateiversion: 0 = von vor den frei definierbaren Funktionen und Graden (Feld fehlt in der Datei)
         public const int AktuelleVersion = 2;
         public int Version;
@@ -108,6 +149,13 @@ namespace ShiftDesk
             return stuendlich ? 1 : Math.Max(1, AbloesungStunden);
         }
 
+        // Darf diese Person diesen Posten besetzen? Funktion muss erlaubt sein; Fahrer nur auf Fahrerposten,
+        // alle anderen nie auf Fahrerposten.
+        public static bool Darf(Person p, Posten k)
+        {
+            return k.Erlaubt(p.Funktion) && (p.Fahrer ? k.Typ == PostenTyp.Fahrer : k.Typ != PostenTyp.Fahrer);
+        }
+
         public bool ImPlan(Person p)
         {
             var f = Funktionen.FirstOrDefault(x => x.Name == p.Funktion);
@@ -135,6 +183,7 @@ namespace ShiftDesk
             k.Einheit = k.Zweck = null;
             if (k.Version < 2) k.AeltereVersionUebernehmen();
             k.Version = AktuelleVersion;
+            k.PflichtpostenErgaenzen();
             return k;
         }
 
@@ -196,14 +245,20 @@ namespace ShiftDesk
             for (int g = 0; g < gruppen.Length; g++)
                 foreach (string name in gruppen[g])
                     k.Personen.Add(new Person { Grad = "Rekr", Name = name, Funktion = "Wache", Gruppe = "Gruppe " + (g + 1) });
+            // Fahrer: je einer pro Gruppe, so sind immer zwei im Dienst
+            string[] fahrer = { "Lüthi", "Schmid", "Roth" };
+            for (int g = 0; g < fahrer.Length; g++)
+                k.Personen.Add(new Person { Grad = "Rekr", Name = fahrer[g], Funktion = "Wache", Gruppe = "Gruppe " + (g + 1), Fahrer = true });
 
             var wache = new List<string> { "Wache" };
             k.Posten.Add(new Posten { Name = "Wacht Kdt", Farbe = Color.FromArgb(79, 173, 234).ToArgb(), Anzahl = 1, AmStueck = true, Funktionen = new List<string> { "Wacht Kdt", "Wacht Kdt Stv" } });
+            k.Posten.Add(new Posten { Name = "Presto", Farbe = Color.FromArgb(234, 88, 12).ToArgb(), Anzahl = 2, Typ = PostenTyp.Fahrer, EssenMoeglich = true, Funktionen = wache.ToList() });
+            k.Posten.Add(new Posten { Name = "Subito", Farbe = Color.FromArgb(13, 148, 136).ToArgb(), Anzahl = 2, EssenMoeglich = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Kdo", Farbe = Color.FromArgb(46, 112, 190).ToArgb(), Anzahl = 1, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Haupteingang", Farbe = Color.FromArgb(178, 34, 34).ToArgb(), Anzahl = 2, OffenVon = 7, OffenBis = 22, Draussen = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Amiti", Farbe = Color.FromArgb(76, 168, 80).ToArgb(), Anzahl = 2, OffenVon = 7, OffenBis = 23, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Patrouille", Farbe = Color.FromArgb(112, 48, 160).ToArgb(), Anzahl = 2, Draussen = true, Funktionen = wache.ToList() });
-            k.Posten.Add(new Posten { Name = "Reserve", Farbe = Color.FromArgb(247, 193, 67).ToArgb(), Anzahl = 2, EssenMoeglich = true, Funktionen = wache.ToList() });
+            k.Posten.Add(new Posten { Name = "Reserve", Farbe = Color.FromArgb(247, 193, 67).ToArgb(), Anzahl = 1, EssenMoeglich = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Pikett", Farbe = Color.FromArgb(166, 166, 166).ToArgb(), Anzahl = 0, Typ = PostenTyp.Auffang, EssenMoeglich = true, Funktionen = wache.ToList() });
 
             k.Essenszeiten.Add(new Essenszeit { Name = "Frühstück", Von = 6, Bis = 10 });

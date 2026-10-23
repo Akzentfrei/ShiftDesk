@@ -32,7 +32,7 @@ namespace ShiftDesk
         static readonly string AutoPfad = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShiftDesk", "letzte.xml");
         static readonly string[] StundenListe = Enumerable.Range(0, 24).Select(h => Zeit.Text(h)).ToArray();
-        static readonly string[] TypListe = { "Normal", "Auffang" };
+        static readonly string[] TypListe = { "Normal", "Auffang", "Fahrer" };
 
         Konfiguration cfg;
         string dateiPfad;
@@ -189,7 +189,7 @@ namespace ShiftDesk
                     if (!GefahrDialog.Fragen(this, "Alle Eingaben löschen und neu beginnen?",
                         "Was nicht als Datei gespeichert ist, geht verloren.", "Alles löschen", "trash-2")) return;
                     dateiPfad = null;
-                    Anzeigen(new Konfiguration { Start = DateTime.Today, Ende = DateTime.Today.AddDays(1) });
+                    Anzeigen(Konfiguration.Neu());
                 })),
                 Tuple.Create("Beispiel laden", "rotate-ccw", (Action)(() =>
                 {
@@ -351,13 +351,14 @@ namespace ShiftDesk
         {
             gridPersonen = NeuesGrid();
             gridPersonen.Columns.Add(Spalte("Grad", "Grad", 50, new SpaltenInfo(SpaltenArt.Auswahl, () => Namen(gridGrade), Waehlen)));
-            gridPersonen.Columns.Add(Spalte("Name", "Name", 130, new SpaltenInfo(SpaltenArt.Text)));
+            gridPersonen.Columns.Add(Spalte("Name", "Name", 130, new SpaltenInfo(SpaltenArt.Text) { Symbol = r => Fahrer(r) ? "car" : null }));
             gridPersonen.Columns.Add(Spalte("Funktion", "Funktion", 85, new SpaltenInfo(SpaltenArt.Auswahl, () => Namen(gridFunktionen), Waehlen)));
             gridPersonen.Columns.Add(Spalte("Gruppe", "Gruppe (Ruhezeit)", 85, new SpaltenInfo(SpaltenArt.Auswahl, () => new[] { "" }.Concat(Namen(gridGruppen)), Keine)));
+            gridPersonen.Columns.Add(Spalte("Fahrer", "Fahrer", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             Zeilenknoepfe(gridPersonen, true);
             Bearbeitbar(gridPersonen);
             return NeueSeite("Personen",
-                "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird; die Reihenfolge änderst du mit den Pfeilen.",
+                "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. «Fahrer» sind nur auf Posten vom Typ «Fahrer» (z. B. Presto) oder in Ruhe eingeteilt und im Plan mit einem Auto markiert. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird; die Reihenfolge änderst du mit den Pfeilen.",
                 KarteMit(gridPersonen),
                 Knopf("Person hinzufügen", "plus", NeuePerson, true));
         }
@@ -392,7 +393,7 @@ namespace ShiftDesk
             Zeilenknoepfe(gridPosten, true);
             Bearbeitbar(gridPosten);
             return NeueSeite("Posten",
-                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
+                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto) ist nur für Fahrer, und Fahrer sind nur dort; die Anzahl sagt, wie viele Fahrer immer da sein müssen. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
                 KarteMit(gridPosten),
                 Knopf("Posten hinzufügen", "plus", () =>
                 {
@@ -762,7 +763,7 @@ namespace ShiftDesk
                 knoepfe.Add(new ZeilenKnopf("chevron-up", i => Verschieben(g, i, -1), i => i > 0));
                 knoepfe.Add(new ZeilenKnopf("chevron-down", i => Verschieben(g, i, 1), i => i < g.RowCount - 1));
             }
-            knoepfe.Add(new ZeilenKnopf("trash-2", i => Entfernen(g, i)) { Gefahr = true });
+            knoepfe.Add(new ZeilenKnopf("trash-2", i => Entfernen(g, i), i => !Pflicht(g, i)) { Gefahr = true });
             var spalte = Spalte("Aktionen", "", 1, new SpaltenInfo(knoepfe.ToArray()));
             spalte.MinimumWidth = spalte.Width = TabellenEditor.AktionenBreite(knoepfe.Count);
             g.Columns.Add(spalte);
@@ -808,7 +809,7 @@ namespace ShiftDesk
             string grad = letzte != null ? Wert(letzte, "Grad") : Namen(gridGrade).FirstOrDefault() ?? "";
             string funktion = letzte != null ? Wert(letzte, "Funktion") : Namen(gridFunktionen).FirstOrDefault() ?? "";
             string gruppe = letzte != null ? Wert(letzte, "Gruppe") : "";
-            Hinzufuegen(gridPersonen, grad, "", funktion, gruppe);
+            Hinzufuegen(gridPersonen, grad, "", funktion, gruppe, false);
         }
 
         Panel SeiteStammdaten()
@@ -895,6 +896,7 @@ namespace ShiftDesk
             foreach (var ed in editoren) ed.Schliessen(true);
             var zeilen = g.SelectedCells.Cast<DataGridViewCell>().Select(c => c.RowIndex).Distinct().OrderByDescending(i => i).ToList();
             if (zeilen.Count == 0 && g.CurrentCell != null) zeilen.Add(g.CurrentCell.RowIndex);
+            zeilen = zeilen.Where(i => !Pflicht(g, i)).ToList();   // Pflichtposten bleiben
             if (zeilen.Count == 0 || !LoeschenBestaetigt(g, zeilen)) return;
             foreach (int i in zeilen) g.Rows.RemoveAt(i);
         }
@@ -902,8 +904,14 @@ namespace ShiftDesk
         void Entfernen(DataGridView g, int zeile)
         {
             foreach (var ed in editoren) ed.Schliessen(true);
-            if (zeile < 0 || zeile >= g.Rows.Count || !LoeschenBestaetigt(g, new List<int> { zeile })) return;
+            if (zeile < 0 || zeile >= g.Rows.Count || Pflicht(g, zeile) || !LoeschenBestaetigt(g, new List<int> { zeile })) return;
             g.Rows.RemoveAt(zeile);
+        }
+
+        // Wacht Kdt, Presto und Subito gibt es immer
+        bool Pflicht(DataGridView g, int zeile)
+        {
+            return g == gridPosten && zeile >= 0 && zeile < g.Rows.Count && Konfiguration.IstPflichtposten(Wert(g.Rows[zeile], "Name"));
         }
 
         // Mit gedrückter Ctrl-Taste wird ohne Nachfrage gelöscht
@@ -934,7 +942,7 @@ namespace ShiftDesk
 
             gridPersonen.Rows.Clear();
             foreach (var p in k.Personen)
-                gridPersonen.Rows.Add(p.Grad, p.Name, p.Funktion, p.Gruppe);
+                gridPersonen.Rows.Add(p.Grad, p.Name, p.Funktion, p.Gruppe, p.Fahrer);
 
             PostenAnzeigen(k.Posten);
 
@@ -969,7 +977,7 @@ namespace ShiftDesk
             foreach (var p in posten)
             {
                 int i = gridPosten.Rows.Add(p.Name, "", p.Anzahl.ToString(), "", Zeit.Text(p.OffenVon), Zeit.Text(p.OffenBis),
-                    p.Typ == PostenTyp.Auffang ? "Auffang" : "Normal", p.Draussen, p.AmStueck, p.EssenMoeglich);
+                    p.Typ == PostenTyp.Auffang ? "Auffang" : p.Typ == PostenTyp.Fahrer ? "Fahrer" : "Normal", p.Draussen, p.AmStueck, p.EssenMoeglich);
                 gridPosten.Rows[i].Cells["Farbe"].Tag = Color.FromArgb(p.Farbe);
                 gridPosten.Rows[i].Cells["Funktionen"].Tag = p.Funktionen.ToList();
             }
@@ -1002,6 +1010,7 @@ namespace ShiftDesk
                     Name = Wert(r, "Name"),
                     Funktion = Wert(r, "Funktion"),
                     Gruppe = Wert(r, "Gruppe"),
+                    Fahrer = Fahrer(r),
                 });
             k.Posten = PostenEinlesen();
             foreach (var r in Zeilen(gridEssen))
@@ -1040,6 +1049,12 @@ namespace ShiftDesk
         static IEnumerable<DataGridViewRow> Zeilen(DataGridView g)
         {
             return g.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow && Wert(r, "Name") != "");
+        }
+
+        static bool Fahrer(DataGridViewRow r)
+        {
+            object v = r.Cells["Fahrer"].Value;
+            return v is bool && (bool)v;
         }
 
         static bool Draussen(DataGridViewRow r)

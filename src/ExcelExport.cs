@@ -240,7 +240,7 @@ namespace ShiftDesk
                 if (r > 0 && plan.Block[r] != plan.Block[r - 1])
                     zeilen.Add(new Zeile(nr++, 8));
                 var p = plan.Zeilen[r];
-                var z = new Zeile(nr++, 22).Text(0, p.Grad, sGrad).Text(1, p.Name, sName).Text(2, p.Funktion, sGrad);
+                var z = new Zeile(nr++, 22).Text(0, p.Grad, sGrad).Text(1, p.Name + (p.Fahrer ? " 🚗" : ""), sName).Text(2, p.Funktion, sGrad);
                 for (int t = 0; t < plan.Stunden; t++)
                 {
                     int k = plan.Z[r, t];
@@ -261,7 +261,8 @@ namespace ShiftDesk
                 verbunden.Add(Spalte(spalte) + (nr - 1) + ":" + Spalte(spalte + 2) + (nr - 1));
             }
             if (cfg.Essenszeiten.Count > 0) { legende.Text(spalte, "🍴 = Essen", sNormal); spalte += 3; }
-            if (cfg.Posten.Any(p => p.Draussen)) legende.Text(spalte, "❄ = Draussen", sNormal);
+            if (cfg.Posten.Any(p => p.Draussen)) { legende.Text(spalte, "❄ = Draussen", sNormal); spalte += 3; }
+            if (plan.Zeilen.Any(p => p.Fahrer)) legende.Text(spalte, "🚗 = Fahrer", sNormal);
             zeilen.Add(legende);
             if (plan.NichtEingeteilt.Count > 0)
                 zeilen.Add(new Zeile(nr++, 20).Text(1, "Nicht eingeteilt", sKopf).Text(ErsteStundenSpalte,
@@ -289,7 +290,7 @@ namespace ShiftDesk
             for (int r = 0; r < plan.Zeilen.Count; r++)
             {
                 var p = plan.Zeilen[r];
-                var z = new Zeile(5 + r, 20).Text(0, p.Grad, sGrad).Text(1, p.Name, sName).Text(2, p.Funktion, sGrad);
+                var z = new Zeile(5 + r, 20).Text(0, p.Grad, sGrad).Text(1, p.Name + (p.Fahrer ? " 🚗" : ""), sName).Text(2, p.Funktion, sGrad);
                 int total = 0, essen = 0;
                 for (int k = 0; k < cfg.Posten.Count; k++)
                 {

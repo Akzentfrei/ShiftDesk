@@ -54,7 +54,7 @@ namespace ShiftDesk
             rnd = new Random(seed);
             anzahl = new int[plan.Zeilen.Count, cfg.Posten.Count];
             gegessen = new long[plan.Zeilen.Count];
-            kannEssen = plan.Zeilen.Select(p => cfg.Posten.Any(k => k.EssenMoeglich && k.Erlaubt(p.Funktion))).ToArray();
+            kannEssen = plan.Zeilen.Select(p => cfg.Posten.Any(k => k.EssenMoeglich && Konfiguration.Darf(p, k))).ToArray();
         }
 
         public static Plan Erstelle(Konfiguration cfg, int seed)
@@ -80,16 +80,17 @@ namespace ShiftDesk
                 int i = cfg.Gruppen.FindIndex(g => g.Name == p.Gruppe);
                 return i < 0 ? int.MaxValue : i;
             };
+            // Fahrer stehen als eigener Block zuunterst
             plan.Zeilen = cfg.Personen.Where(cfg.ImPlan)
                 .Select((p, i) => new { p, i })
-                .OrderBy(x => funktionIndex(x.p)).ThenBy(x => gruppenIndex(x.p)).ThenBy(x => x.i)
+                .OrderBy(x => x.p.Fahrer).ThenBy(x => funktionIndex(x.p)).ThenBy(x => gruppenIndex(x.p)).ThenBy(x => x.i)
                 .Select(x => x.p).ToList();
             plan.NichtEingeteilt = cfg.Personen.Where(p => !cfg.ImPlan(p)).ToList();
             if (plan.Zeilen.Count == 0)
                 throw new Exception("Es sind keine Personen erfasst, die eingeteilt werden.");
 
             // Blöcke: gleiche Menge erlaubter Posten
-            Func<Person, string> schluessel = p => string.Join("|", Enumerable.Range(0, cfg.Posten.Count).Where(k => cfg.Posten[k].Erlaubt(p.Funktion)));
+            Func<Person, string> schluessel = p => string.Join("|", Enumerable.Range(0, cfg.Posten.Count).Where(k => Konfiguration.Darf(p, cfg.Posten[k])));
             plan.Block = new int[plan.Zeilen.Count];
             for (int r = 1; r < plan.Zeilen.Count; r++)
                 plan.Block[r] = plan.Block[r - 1] + (schluessel(plan.Zeilen[r]) == schluessel(plan.Zeilen[r - 1]) ? 0 : 1);
@@ -101,7 +102,8 @@ namespace ShiftDesk
             {
                 plan.Team[r] = team;
                 if (cfg.Zweierteams && r + 1 < plan.Zeilen.Count
-                    && plan.Zeilen[r + 1].Funktion == plan.Zeilen[r].Funktion && plan.Zeilen[r + 1].Gruppe == plan.Zeilen[r].Gruppe)
+                    && plan.Zeilen[r + 1].Funktion == plan.Zeilen[r].Funktion && plan.Zeilen[r + 1].Gruppe == plan.Zeilen[r].Gruppe
+                    && plan.Zeilen[r + 1].Fahrer == plan.Zeilen[r].Fahrer)
                     plan.Team[++r] = team;
                 r++;
             }
@@ -130,9 +132,14 @@ namespace ShiftDesk
                     plan.Warnungen.Add(Name(r) + ": keine gültige Gruppe, ist darum nie in Ruhe.");
                 if (!cfg.Funktionen.Any(f => f.Name == p.Funktion))
                     plan.Warnungen.Add(Name(r) + ": unbekannte Funktion «" + p.Funktion + "».");
-                else if (!cfg.Posten.Any(k => k.Erlaubt(p.Funktion)))
-                    plan.Warnungen.Add(Name(r) + ": kein Posten erlaubt die Funktion «" + p.Funktion + "».");
+                else if (!cfg.Posten.Any(k => Konfiguration.Darf(p, k)))
+                    plan.Warnungen.Add(Name(r) + (p.Fahrer
+                        ? ": ist Fahrer, aber kein Posten vom Typ «Fahrer» erlaubt die Funktion «" + p.Funktion + "»."
+                        : ": kein Posten erlaubt die Funktion «" + p.Funktion + "»."));
             }
+            foreach (var p in cfg.Posten.Where(k => k.Typ == PostenTyp.Fahrer))
+                if (!plan.Zeilen.Any(z => z.Fahrer))
+                    plan.Warnungen.Add("Posten «" + p.Name + "» ist vom Typ «Fahrer», aber niemand ist als Fahrer erfasst.");
             // Posten, die eine inzwischen gelöschte Funktion erlauben (bleibt sonst unbemerkt unbesetzt)
             foreach (var p in cfg.Posten)
             {
@@ -268,16 +275,18 @@ namespace ShiftDesk
                 else
                     einheiten.Add(new[] { r });
             }
-            bool teams = einheiten.Any(e => e.Length == 2);
+            Func<int[], Posten, bool> erlaubtFuer = (e, p) => e.All(r => Konfiguration.Darf(plan.Zeilen[r], p));
 
-            // Plätze: Posten k mit Grösse g (2 = Doppelplatz für ein Team, 1 = Einzelplatz)
+            // Plätze: Posten k mit Grösse g (2 = Doppelplatz für ein Team, 1 = Einzelplatz).
+            // Doppelplätze nur so viele, wie Teams da sind, die den Posten besetzen dürfen; der Rest sind Einzelplätze
+            // (z. B. Fahrerposten, wenn die Fahrer einzeln sind).
             var plaetze = new List<int>();
             var groesse = new List<int>();
             for (int k = 0; k < cfg.Posten.Count; k++)
             {
                 var p = cfg.Posten[k];
                 if (p.Typ == PostenTyp.Auffang || !p.OffenUm(h)) continue;
-                int doppel = teams ? p.Anzahl / 2 : 0;
+                int doppel = Math.Min(p.Anzahl / 2, einheiten.Count(e => e.Length == 2 && erlaubtFuer(e, p)));
                 for (int i = 0; i < doppel; i++) { plaetze.Add(k); groesse.Add(2); }
                 for (int i = 0; i < p.Anzahl - 2 * doppel; i++) { plaetze.Add(k); groesse.Add(1); }
             }
@@ -293,10 +302,9 @@ namespace ShiftDesk
             var schnitt = new double[cfg.Posten.Count];
             for (int k = 0; k < cfg.Posten.Count; k++)
             {
-                var erlaubt = zeilen.Where(r => cfg.Posten[k].Erlaubt(plan.Zeilen[r].Funktion)).ToList();
+                var erlaubt = zeilen.Where(r => Konfiguration.Darf(plan.Zeilen[r], cfg.Posten[k])).ToList();
                 schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
             }
-            Func<int[], Posten, bool> erlaubtFuer = (e, p) => e.All(r => p.Erlaubt(plan.Zeilen[r].Funktion));
             var rest = einheiten.Select(e => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && erlaubtFuer(e, p))).ToArray();
             Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen));
 

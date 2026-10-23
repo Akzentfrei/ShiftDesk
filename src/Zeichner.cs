@@ -100,6 +100,12 @@ namespace ShiftDesk
                         var p = plan.Zeilen[r];
                         g.DrawString(p.Grad, fName, tGrau, new RectangleF(b.Left, zy, gradW, zeileH), links);
                         g.DrawString(p.Name, fName, tText, new RectangleF(b.Left + gradW, zy, nameW - 4 * u, zeileH), links);
+                        if (p.Fahrer)
+                        {
+                            float ik = Math.Min(zeileH * 0.62f, 12 * u);
+                            float nw = Math.Min(nameW - 6 * u - ik, g.MeasureString(p.Name, fName).Width);
+                            AutoSymbol(g, new RectangleF(b.Left + gradW + nw + 3 * u, zy + (zeileH - ik) / 2, ik, ik));
+                        }
                         // Trennlinie zwischen den Zeilen; Mitglieder eines festen Teams bleiben ohne Linie zusammen
                         if (r < n - 1 && plan.Block[r + 1] == plan.Block[r] && plan.Team[r + 1] != plan.Team[r])
                             g.DrawLine(linie, b.Left, zy + zeileH, xs - spalt, zy + zeileH);
@@ -176,27 +182,30 @@ namespace ShiftDesk
                 g.DrawString("Legende", fKleinFett, tGrau, new RectangleF(b.Left + gradW, ly, nameW, legendeH), links);
                 float lx = xs;
                 float q = 10 * u;
-                // Posten (mit Schneeflocke, wenn im Freien), dann die Erklärungen für Essen und Draussen
-                bool irgendwoDraussen = cfg.Posten.Any(p => p.Draussen);
-                for (int k = 0; k <= cfg.Posten.Count + 1; k++)
-                {
-                    bool essen = k == cfg.Posten.Count, draussen = k == cfg.Posten.Count + 1;
-                    if (essen && cfg.Essenszeiten.Count == 0) continue;
-                    if (draussen && !irgendwoDraussen) break;
-                    string name = essen ? "Essen" : draussen ? "Draussen" : cfg.Posten[k].Name;
-                    var feld = new RectangleF(lx, ly + (legendeH - q) / 2, q, q);
-                    if (essen)
+                // Posten (mit Schneeflocke, wenn im Freien), dann die Erklärungen für Essen, Draussen und Fahrer
+                var extras = new List<KeyValuePair<string, Action<RectangleF>>>();
+                if (cfg.Essenszeiten.Count > 0)
+                    extras.Add(new KeyValuePair<string, Action<RectangleF>>("Essen", feld =>
                     {
                         var gross = RectangleF.Inflate(feld, 2.5f * u, 2.5f * u);
                         g.FillEllipse(new SolidBrush(Leer), gross);
                         EssenSymbol(g, gross);
-                    }
-                    else if (draussen) SchneeSymbol(g, feld);
-                    else Formen.Fuellen(g, feld, 2 * u, Color.FromArgb(cfg.Posten[k].Farbe));
+                    }));
+                if (cfg.Posten.Any(p => p.Draussen))
+                    extras.Add(new KeyValuePair<string, Action<RectangleF>>("Draussen", feld => SchneeSymbol(g, feld)));
+                if (plan.Zeilen.Any(p => p.Fahrer))
+                    extras.Add(new KeyValuePair<string, Action<RectangleF>>("Fahrer", feld => AutoSymbol(g, RectangleF.Inflate(feld, 1.5f * u, 1.5f * u))));
+                for (int k = 0; k < cfg.Posten.Count + extras.Count; k++)
+                {
+                    bool posten = k < cfg.Posten.Count;
+                    string name = posten ? cfg.Posten[k].Name : extras[k - cfg.Posten.Count].Key;
+                    var feld = new RectangleF(lx, ly + (legendeH - q) / 2, q, q);
+                    if (posten) Formen.Fuellen(g, feld, 2 * u, Color.FromArgb(cfg.Posten[k].Farbe));
+                    else extras[k - cfg.Posten.Count].Value(feld);
                     float w = g.MeasureString(name, fKlein).Width;
                     g.DrawString(name, fKlein, tText, new RectangleF(lx + q + 4 * u, ly, w + 2 * u, legendeH), links);
                     lx += q + 4 * u + w;
-                    if (!essen && !draussen && cfg.Posten[k].Draussen)
+                    if (posten && cfg.Posten[k].Draussen)
                     {
                         SchneeSymbol(g, new RectangleF(lx + 2 * u, ly + (legendeH - q) / 2, q, q));
                         lx += q + 2 * u;
@@ -237,6 +246,12 @@ namespace ShiftDesk
         {
             int hell = (hintergrund.R * 299 + hintergrund.G * 587 + hintergrund.B * 114) / 1000;
             return hell < 150 ? Color.White : TextFarbe;
+        }
+
+        // Auto: Fahrer
+        static void AutoSymbol(Graphics g, RectangleF feld)
+        {
+            Lucide.Zeichne(g, "car", feld, Grau, 2.2f);
         }
 
         // Schneeflocke: Posten im Freien
