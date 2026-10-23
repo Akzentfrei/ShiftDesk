@@ -382,12 +382,12 @@ namespace ShiftDesk
         {
             gridPosten = NeuesGrid();
             gridPosten.Columns.Add(Spalte("Name", "Posten", 105, new SpaltenInfo(SpaltenArt.Text) { Symbol = r => Draussen(r) ? "snowflake" : null }));
-            gridPosten.Columns.Add(Spalte("Farbe", "Farbe", 55, new SpaltenInfo(SpaltenArt.Farbe)));
+            gridPosten.Columns.Add(Spalte("Farbe", "Farbe", 55, new SpaltenInfo(SpaltenArt.Farbe), 74));
             gridPosten.Columns.Add(Spalte("Anzahl", "Personen", 48, new SpaltenInfo(SpaltenArt.Zahl)));
-            gridPosten.Columns.Add(Spalte("Funktionen", "Funktionen", 125, new SpaltenInfo(SpaltenArt.Mehrfach, () => Namen(gridFunktionen), s => s == "" ? "Alle" : s)));
+            gridPosten.Columns.Add(Spalte("Funktionen", "Funktionen", 125, new SpaltenInfo(SpaltenArt.Mehrfach, () => Namen(gridFunktionen), s => s == "" ? "Alle" : s), 116));
             gridPosten.Columns.Add(Spalte("Von", "Offen von", 58, StundenInfo()));
             gridPosten.Columns.Add(Spalte("Bis", "Offen bis", 58, StundenInfo()));
-            gridPosten.Columns.Add(Spalte("Typ", "Typ", 62, new SpaltenInfo(SpaltenArt.Auswahl, () => TypListe)));
+            gridPosten.Columns.Add(Spalte("Typ", "Typ", 62, new SpaltenInfo(SpaltenArt.Auswahl, () => TypListe), 86));
             gridPosten.Columns.Add(Spalte("Pflicht", "Pflicht", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("Draussen", "Draussen", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("AmStueck", "Am Stück", 42, new SpaltenInfo(SpaltenArt.Schalter)));
@@ -719,13 +719,23 @@ namespace ShiftDesk
 
         int statistikHover = -1;
 
-        static DataGridViewTextBoxColumn Spalte(string name, string titel, int gewicht, SpaltenInfo info)
+        // mindestens: eigene Mindestbreite (0 = nach Spaltenart)
+        static DataGridViewTextBoxColumn Spalte(string name, string titel, int gewicht, SpaltenInfo info, int mindestens = 0)
         {
-            int mindestens;
+            if (mindestens > 0)
+                return new DataGridViewTextBoxColumn
+                {
+                    Name = name,
+                    HeaderText = titel,
+                    FillWeight = gewicht,
+                    Tag = info,
+                    SortMode = DataGridViewColumnSortMode.NotSortable,
+                    MinimumWidth = Theme.S(mindestens),
+                };
             switch (info.Art)
             {
-                case SpaltenArt.Schalter: mindestens = 70; break;
-                case SpaltenArt.Zahl: mindestens = 72; break;
+                case SpaltenArt.Schalter: mindestens = 52; break;
+                case SpaltenArt.Zahl: mindestens = 64; break;
                 case SpaltenArt.Farbe: mindestens = 84; break;
                 case SpaltenArt.Mehrfach: mindestens = 130; break;
                 case SpaltenArt.Auswahl: mindestens = 100; break;
