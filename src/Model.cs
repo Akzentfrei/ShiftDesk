@@ -156,6 +156,13 @@ namespace ShiftDesk
             return k.Erlaubt(p.Funktion) && (p.Fahrer ? k.Typ == PostenTyp.Fahrer : k.Typ != PostenTyp.Fahrer);
         }
 
+        // Fahrer helfen bei Unterbesetzung auf normalen Posten aus (nicht auf Auffangposten); einer bleibt immer
+        // auf dem Fahrerposten, das regelt der Planer.
+        public static bool Aushilfe(Person p, Posten k)
+        {
+            return p.Fahrer && k.Typ == PostenTyp.Normal && k.Erlaubt(p.Funktion);
+        }
+
         public bool ImPlan(Person p)
         {
             var f = Funktionen.FirstOrDefault(x => x.Name == p.Funktion);

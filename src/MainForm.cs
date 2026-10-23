@@ -53,6 +53,7 @@ namespace ShiftDesk
         Eingabefeld txtName;
         DatumFeld dtStart, dtEnde;
         AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis, teams;
+        bool hinweiseOffen;
         static readonly string[] AbloesungListe = { "Jede Stunde", "Alle 2 Stunden", "Alle 3 Stunden", "Alle 4 Stunden" };
         // Index = erlaubte Stunden am Stück draussen, 0 = keine Grenze
         static readonly string[] DraussenListe = { "Keine Grenze", "Höchstens 1 Stunde", "Höchstens 2 Stunden", "Höchstens 3 Stunden", "Höchstens 4 Stunden", "Höchstens 6 Stunden" };
@@ -358,7 +359,7 @@ namespace ShiftDesk
             Zeilenknoepfe(gridPersonen, true);
             Bearbeitbar(gridPersonen);
             return NeueSeite("Personen",
-                "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. «Fahrer» sind nur auf Posten vom Typ «Fahrer» (z. B. Presto) oder in Ruhe eingeteilt und im Plan mit einem Auto markiert. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird; die Reihenfolge änderst du mit den Pfeilen.",
+                "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. «Fahrer» sind auf dem Posten vom Typ «Fahrer» (z. B. Presto) oder in Ruhe eingeteilt und im Plan mit einem Auto markiert; nur bei Unterbesetzung helfen sie auf anderen Posten aus. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird; die Reihenfolge änderst du mit den Pfeilen.",
                 KarteMit(gridPersonen),
                 Knopf("Person hinzufügen", "plus", NeuePerson, true));
         }
@@ -393,7 +394,7 @@ namespace ShiftDesk
             Zeilenknoepfe(gridPosten, true);
             Bearbeitbar(gridPosten);
             return NeueSeite("Posten",
-                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto) ist nur für Fahrer, und Fahrer sind nur dort; die Anzahl sagt, wie viele Fahrer immer da sein müssen. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
+                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto) ist nur für Fahrer; die Anzahl ist das Soll, mindestens einer bleibt immer dort, die übrigen Fahrer helfen bei Unterbesetzung auf anderen Posten aus. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
                 KarteMit(gridPosten),
                 Knopf("Posten hinzufügen", "plus", () =>
                 {
@@ -455,6 +456,13 @@ namespace ShiftDesk
 
             // Statuszeile mit Seitenwahl
             status = new StatusChip { Location = new Point(0, Theme.S(8)) };
+            // Hinweise erscheinen erst auf Klick auf den Status-Chip
+            status.Click += (s, e) =>
+            {
+                if (plan == null || plan.Warnungen.Count == 0) return;
+                hinweiseOffen = !hinweiseOffen;
+                StatusAktualisieren();
+            };
             lblSeite = new Label { AutoSize = false, Width = Theme.S(110), Height = Theme.S(36), TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Semibold", 9.5f) };
             btnZurueck = Knopf("", "chevron-left", () => Blaettern(-1));
             btnVor = Knopf("", "chevron-right", () => Blaettern(1));
@@ -538,7 +546,7 @@ namespace ShiftDesk
             koerper.Controls.Add(einstellungen);
 
             return NeueSeite("Plan",
-                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. «Feste Zweierteams»: je zwei Personen (Reihenfolge der Personen-Tabelle) sind immer zusammen auf dem gleichen Posten. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
+                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante; Hinweise zeigt ein Klick auf den Status. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. «Feste Zweierteams»: je zwei Personen (Reihenfolge der Personen-Tabelle) sind immer zusammen auf dem gleichen Posten. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
                 koerper,
                 Knopf("Drucken", "printer", Drucken),
                 Knopf("Als PDF", "file-down", AlsPdf),
@@ -1122,6 +1130,7 @@ namespace ShiftDesk
             }
             seite = 0;
             lstWarnungen.Setzen(plan.Warnungen);
+            hinweiseOffen = false;   // Hinweise sind zugeklappt, bis man auf den Status-Chip klickt
             StatistikAnzeigen();
             StatusAktualisieren();
         }
@@ -1136,11 +1145,11 @@ namespace ShiftDesk
         void StatusAktualisieren()
         {
             bool hinweise = plan != null && plan.Warnungen.Count > 0;
-            warnKarte.Visible = warnAbstand.Visible = hinweise;
+            warnKarte.Visible = warnAbstand.Visible = hinweise && hinweiseOffen;
             if (plan == null)
                 status.Setzen("", "circle-check", Theme.Erfolg);
             else if (hinweise)
-                status.Setzen(plan.Warnungen.Count == 1 ? "1 Hinweis" : plan.Warnungen.Count + " Hinweise", "triangle-alert", Theme.Warnung);
+                status.Setzen(plan.Warnungen.Count == 1 ? "1 Hinweis" : plan.Warnungen.Count + " Hinweise", "triangle-alert", Theme.Warnung, true, hinweiseOffen);
             else
                 status.Setzen(plan.Cfg.Essenszeiten.Count > 0 ? "Alle Posten besetzt, alle haben Essen" : "Alle Posten besetzt", "circle-check", Theme.Erfolg);
             lblSeite.Text = plan == null ? "" : "Seite " + (seite + 1) + " / " + plan.Seiten;

@@ -8,9 +8,9 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 
 - **Funktionen & Grade** frei anlegen (z. B. Wacht Kdt, Wacht Kdt Stv, Wache, Reserve); Funktionen ohne
   «Im Plan einteilen» erscheinen nur als «Nicht eingeteilt» unten auf dem Plan
-- **Personen** mit Grad, Funktion und Ruhegruppe; «Fahrer» sind nur auf Posten vom Typ «Fahrer» (z. B. Presto)
-  oder in Ruhe eingeteilt und im Plan mit einem Auto markiert, die Anzahl des Fahrerpostens sagt, wie viele
-  Fahrer immer da sein müssen
+- **Personen** mit Grad, Funktion und Ruhegruppe; «Fahrer» sind auf dem Posten vom Typ «Fahrer» (z. B. Presto)
+  oder in Ruhe eingeteilt und im Plan mit einem Auto markiert; die Anzahl des Fahrerpostens ist das Soll,
+  mindestens ein Fahrer bleibt immer dort, die übrigen helfen bei Unterbesetzung auf anderen Posten aus
 - **Gruppen & Ruhezeiten**: tägliche Ruhefenster, auch über Mitternacht
 - **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
   Typ «Fahrer» (nur für Fahrer), die Pflichtposten Wacht Kdt, Presto und Subito (immer vorhanden),

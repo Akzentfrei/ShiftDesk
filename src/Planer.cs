@@ -194,7 +194,8 @@ namespace ShiftDesk
             {
                 var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
                 plan.Warnungen.Insert(0, "Posten «" + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
-                    " Stunde(n) nicht voll besetzt: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
+                    (cfg.Posten[e.Key].Typ == PostenTyp.Fahrer ? " Stunde(n) ohne Fahrer: " : " Stunde(n) nicht voll besetzt: ") +
+                    string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
             }
         }
 
@@ -276,20 +277,31 @@ namespace ShiftDesk
                     einheiten.Add(new[] { r });
             }
             Func<int[], Posten, bool> erlaubtFuer = (e, p) => e.All(r => Konfiguration.Darf(plan.Zeilen[r], p));
+            // zusätzlich als Aushilfe: Fahrer auf normalen Posten, wenn sonst niemand da ist
+            Func<int[], Posten, bool> besetzbar = (e, p) => e.All(r => Konfiguration.Darf(plan.Zeilen[r], p) || Konfiguration.Aushilfe(plan.Zeilen[r], p));
 
             // Plätze: Posten k mit Grösse g (2 = Doppelplatz für ein Team, 1 = Einzelplatz).
-            // Doppelplätze nur so viele, wie Teams da sind, die den Posten besetzen dürfen; der Rest sind Einzelplätze
-            // (z. B. Fahrerposten, wenn die Fahrer einzeln sind).
+            // Doppelplätze nur so viele, wie Teams da sind, die den Posten besetzen dürfen (und insgesamt nicht mehr
+            // als Teams); der Rest sind Einzelplätze (z. B. Fahrerposten, wenn die Fahrer einzeln sind).
+            // leer[j]: Kosten, wenn der Platz unbesetzt bleibt. Wichtigere Posten (weiter oben) werden zuerst besetzt.
+            // Beim Fahrerposten muss der erste Platz unbedingt besetzt sein (mindestens ein Fahrer), die weiteren
+            // Plätze dürfen bei allgemeiner Unterbesetzung leer bleiben, damit Fahrer anderswo aushelfen können.
             var plaetze = new List<int>();
             var groesse = new List<int>();
+            var leer = new List<double>();
+            int paareUebrig = einheiten.Count(e => e.Length == 2);
             for (int k = 0; k < cfg.Posten.Count; k++)
             {
                 var p = cfg.Posten[k];
                 if (p.Typ == PostenTyp.Auffang || !p.OffenUm(h)) continue;
-                int doppel = Math.Min(p.Anzahl / 2, einheiten.Count(e => e.Length == 2 && erlaubtFuer(e, p)));
+                int doppel = Math.Min(Math.Min(p.Anzahl / 2, paareUebrig), einheiten.Count(e => e.Length == 2 && erlaubtFuer(e, p)));
+                paareUebrig -= doppel;
                 for (int i = 0; i < doppel; i++) { plaetze.Add(k); groesse.Add(2); }
                 for (int i = 0; i < p.Anzahl - 2 * doppel; i++) { plaetze.Add(k); groesse.Add(1); }
+                for (int i = 0; i < p.Anzahl - doppel; i++)
+                    leer.Add(p.Typ == PostenTyp.Fahrer ? (i == 0 ? 2 * LEER : LEER / 2) : LEER);
             }
+            for (int j = 0; j < leer.Count; j++) leer[j] += (leer.Count - j) * 100;
 
             // Mitten in einer Ablösung (fortsetzen) bleibt jeder auf seinem Posten: das Bleiben ist in den Kosten
             // so stark belohnt, dass nur zwei Dinge einen Wechsel auslösen: wer auf dem Auffangposten sitzt, rückt
@@ -306,19 +318,20 @@ namespace ShiftDesk
                 schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
             }
             var rest = einheiten.Select(e => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && erlaubtFuer(e, p))).ToArray();
-            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen));
+            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen)
+                + (k >= 0 && Konfiguration.Aushilfe(plan.Zeilen[r], cfg.Posten[k]) ? AUSHILFE : 0));
 
             var kosten = new double[N, N];
             for (int i = 0; i < N; i++)
                 for (int j = 0; j < N; j++)
                 {
                     if (i < n && j < m)
-                        kosten[i, j] = groesse[j] == einheiten[i].Length && erlaubtFuer(einheiten[i], cfg.Posten[plaetze[j]])
+                        kosten[i, j] = groesse[j] == einheiten[i].Length && besetzbar(einheiten[i], cfg.Posten[plaetze[j]])
                             ? kostenEinheit(einheiten[i], plaetze[j]) : SPERRE;
                     else if (i < n)
                         kosten[i, j] = kostenEinheit(einheiten[i], rest[i]);
                     else if (j < m)
-                        kosten[i, j] = LEER + (m - j) * 100;  // wichtigere Posten (weiter oben) immer zuerst besetzen
+                        kosten[i, j] = leer[j];
                     else
                         kosten[i, j] = 0;
                 }
@@ -336,16 +349,20 @@ namespace ShiftDesk
                     if (k >= 0) anzahl[r, k]++;
                 }
             }
+            // Unbesetzte Plätze melden; ein Fahrerposten gilt erst als unterbesetzt, wenn gar niemand dort ist
             for (int j = 0; j < m; j++)
             {
                 if (besetzt[j]) continue;
+                int k = plaetze[j];
+                if (cfg.Posten[k].Typ == PostenTyp.Fahrer && Enumerable.Range(0, m).Any(x => plaetze[x] == k && besetzt[x])) continue;
                 List<int> liste;
-                if (!unterbesetzt.TryGetValue(plaetze[j], out liste))
-                    unterbesetzt[plaetze[j]] = liste = new List<int>();
+                if (!unterbesetzt.TryGetValue(k, out liste))
+                    unterbesetzt[k] = liste = new List<int>();
                 if (liste.Count == 0 || liste[liste.Count - 1] != t) liste.Add(t);
             }
         }
 
+        const double AUSHILFE = 300;  // Fahrer auf einem normalen Posten: nur, wenn der Platz sonst leer bliebe
         const double BLEIBEN = 30;    // Belohnung, mitten im Block auf dem Posten zu bleiben
         const double DRAUSSEN = 80;   // Strafe, über die erlaubte Zeit hinaus draussen zu bleiben (> 2 × BLEIBEN, damit ein Tausch lohnt)
 

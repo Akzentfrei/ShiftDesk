@@ -541,6 +541,7 @@ namespace ShiftDesk
     {
         public string Icon = "circle-check";
         public Color Farbe = Color.Green;
+        bool klickbar, offen, hover;
 
         public StatusChip()
         {
@@ -548,26 +549,38 @@ namespace ShiftDesk
             Height = Theme.S(30);
         }
 
-        public void Setzen(string text, string icon, Color farbe)
+        // klickbar: der Chip klappt etwas auf oder zu (Pfeil rechts), offen = aktuell aufgeklappt
+        public void Setzen(string text, string icon, Color farbe, bool klickbar = false, bool offen = false)
         {
             Text = text;
             Icon = icon;
             Farbe = farbe;
-            Width = Theme.S(12 + 16 + 8 + 14) + TextRenderer.MeasureText(text, Font).Width;
+            this.klickbar = klickbar;
+            this.offen = offen;
+            Cursor = klickbar ? Cursors.Hand : Cursors.Default;
+            Width = Theme.S(12 + 16 + 8 + 14) + TextRenderer.MeasureText(text, Font).Width + (klickbar ? Theme.S(14 + 4) : 0);
             Visible = !string.IsNullOrEmpty(text);
             Invalidate();
         }
+
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0, 0, Width - 1, Height - 1);
-            Formen.Fuellen(g, r, Height / 2f, Color.FromArgb(Theme.Dunkel ? 45 : 28, Farbe));
+            Formen.Fuellen(g, r, Height / 2f, Color.FromArgb((Theme.Dunkel ? 45 : 28) + (klickbar && hover ? 18 : 0), Farbe));
             int s = Theme.S(16);
             Lucide.Zeichne(g, Icon, new RectangleF(Theme.S(12), (Height - s) / 2f, s, s), Farbe);
             TextRenderer.DrawText(g, Text, Font, new Rectangle(Theme.S(12) + s + Theme.S(8), 0, Width, Height), Farbe,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+            if (klickbar)
+            {
+                int p = Theme.S(14);
+                Lucide.Zeichne(g, offen ? "chevron-up" : "chevron-down", new RectangleF(Width - Theme.S(14) - p, (Height - p) / 2f, p, p), Farbe);
+            }
         }
     }
 }
