@@ -328,7 +328,7 @@ namespace ShiftDesk
     {
         static readonly CultureInfo De = new CultureInfo("de-CH");
         DateTime wert = DateTime.Today;
-        int hoverZone = -1;
+        int hoverZone = -1, offeneZone = -1;
 
         public event EventHandler WertGeaendert;
 
@@ -373,6 +373,13 @@ namespace ShiftDesk
             }
         }
 
+        void Offen(Popup popup, int zone)
+        {
+            offeneZone = zone;
+            Invalidate();
+            popup.Closed += (s, e) => { offeneZone = -1; Invalidate(); };
+        }
+
         int ZoneBei(Point p)
         {
             for (int i = 0; i < 6; i++)
@@ -390,17 +397,21 @@ namespace ShiftDesk
                 case 3: Wert = wert.AddHours(1); break;
                 case 4:
                 {
+                    if (Popup.GeradeGeschlossen(Tuple.Create(this, 4))) break;
                     var k = new Kalender(wert);
-                    var popup = new Popup(k);
+                    var popup = new Popup(k, Tuple.Create(this, 4));
                     k.Gewaehlt += d => { popup.Close(); Wert = d.Date.AddHours(wert.Hour); };
+                    Offen(popup, 4);
                     popup.ZeigenBei(this, new Rectangle(0, 0, Width, Height));
                     break;
                 }
                 case 5:
                 {
-                    var liste = new AuswahlListe(Enumerable.Range(0, 24).Select(Zeit.Text), new[] { Zeit.Text(wert.Hour) }, false, Zone(5).Width + Theme.S(60));
-                    var popup = new Popup(liste);
+                    if (Popup.GeradeGeschlossen(Tuple.Create(this, 5))) break;
+                    var liste = new AuswahlListe(Enumerable.Range(0, 24).Select(Zeit.Text), new[] { Zeit.Text(wert.Hour) }, false, Width - Trenner);
+                    var popup = new Popup(liste, Tuple.Create(this, 5));
                     liste.Gewaehlt += s => { popup.Close(); Wert = wert.Date.AddHours(int.Parse(s.Substring(0, 2))); };
+                    Offen(popup, 5);
                     popup.ZeigenBei(this, new Rectangle(Trenner, 0, Width - Trenner, Height));
                     break;
                 }
@@ -459,11 +470,13 @@ namespace ShiftDesk
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
             Formen.Fuellen(g, r, Theme.S(8), Theme.Eingabe);
-            Formen.Umrandung(g, r, Theme.S(8), Focused ? Theme.Akzent : Theme.EingabeRand, Focused ? 1.5f : 1f);
+            bool aktiv = Focused || offeneZone >= 0;
+            Formen.Umrandung(g, r, Theme.S(8), aktiv ? Theme.Akzent : Theme.EingabeRand, aktiv ? 1.5f : 1f);
             using (var linie = new Pen(Theme.EingabeRand))
                 g.DrawLine(linie, Trenner, Theme.S(8), Trenner, Height - Theme.S(8));
 
-            if (hoverZone >= 4) Formen.Fuellen(g, Zone(hoverZone), Theme.S(6), Theme.Hover);
+            if (offeneZone >= 4) Formen.Fuellen(g, Zone(offeneZone), Theme.S(6), Theme.Auswahl);
+            else if (hoverZone >= 4) Formen.Fuellen(g, Zone(hoverZone), Theme.S(6), Theme.Hover);
             for (int i = 0; i < 4; i++)
             {
                 var z = Zone(i);
@@ -611,8 +624,9 @@ namespace ShiftDesk
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (Popup.GeradeGeschlossen(this)) { base.OnMouseDown(e); return; }
             var liste = new AuswahlListe(optionen, new[] { wert }, false, Width);
-            var popup = new Popup(liste);
+            var popup = new Popup(liste, this);
             liste.Gewaehlt += w =>
             {
                 popup.Close();
@@ -635,7 +649,7 @@ namespace ShiftDesk
             Formen.Fuellen(g, r, Theme.S(8), Theme.Eingabe);
             Formen.Umrandung(g, r, Theme.S(8), offen ? Theme.Akzent : hover ? Theme.Gedaempft : Theme.EingabeRand, offen ? 1.5f : 1f);
             int icon = Theme.S(14);
-            Lucide.Zeichne(g, "chevron-down", new RectangleF(Width - icon - Theme.S(12), (Height - icon) / 2f, icon, icon), Theme.Gedaempft);
+            Lucide.Zeichne(g, offen ? "chevron-up" : "chevron-down", new RectangleF(Width - icon - Theme.S(12), (Height - icon) / 2f, icon, icon), offen ? Theme.Akzent : Theme.Gedaempft);
             TextRenderer.DrawText(g, wert, Font, new Rectangle(Theme.S(11), 0, Width - icon - Theme.S(28), Height), Theme.Text,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }

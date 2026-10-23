@@ -153,7 +153,7 @@ namespace ShiftDesk
             bool aufklappbar = info.Art == SpaltenArt.Auswahl || info.Art == SpaltenArt.Mehrfach || info.Art == SpaltenArt.Farbe;
             int textRechts = feld.Right - Theme.S(10) - (aufklappbar ? icon + Theme.S(6) : 0);
             if (aufklappbar)
-                Lucide.Zeichne(gr, "chevron-down", new RectangleF(feld.Right - icon - Theme.S(10), feld.Y + (feld.Height - icon) / 2f, icon, icon), Theme.Gedaempft);
+                Lucide.Zeichne(gr, aktiv ? "chevron-up" : "chevron-down", new RectangleF(feld.Right - icon - Theme.S(10), feld.Y + (feld.Height - icon) / 2f, icon, icon), aktiv ? Theme.Akzent : Theme.Gedaempft);
 
             if (info.Art == SpaltenArt.Farbe)
             {
@@ -232,6 +232,7 @@ namespace ShiftDesk
                 case SpaltenArt.Auswahl:
                 case SpaltenArt.Mehrfach:
                 {
+                    if (Popup.GeradeGeschlossen(zelle)) break;
                     bool mehrfach = info.Art == SpaltenArt.Mehrfach;
                     var aktuell = mehrfach ? (zelle.Tag as List<string> ?? new List<string>()) : new List<string> { WertText(zelle) };
                     var liste = new AuswahlListe(info.Optionen(), aktuell, mehrfach, feld.Width, info.Anzeige);
@@ -244,6 +245,7 @@ namespace ShiftDesk
 
                 case SpaltenArt.Farbe:
                 {
+                    if (Popup.GeradeGeschlossen(zelle)) break;
                     var aktuell = zelle.Tag is Color ? (Color)zelle.Tag : Color.Gray;
                     var palette = new FarbAuswahl(aktuell);
                     var popup = new Popup(palette);
@@ -268,6 +270,7 @@ namespace ShiftDesk
         void AufklappenBei(DataGridViewCell zelle, Popup popup, Rectangle feld)
         {
             offeneZelle = zelle;
+            popup.Besitzer = zelle;
             g.InvalidateCell(zelle);
             popup.Closed += (s, e) =>
             {
