@@ -162,8 +162,8 @@ namespace ShiftDesk
 
         public static void Deinstallieren(bool leise)
         {
-            if (!leise && MessageBox.Show("ShiftDesk wirklich deinstallieren?", "ShiftDesk deinstallieren",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            if (!leise && !GefahrDialog.Fragen(null, "ShiftDesk wirklich deinstallieren?",
+                    "Selbst gespeicherte .shiftdesk-Dateien bleiben erhalten.", "Deinstallieren"))
                 return;
             if (AndereInstanzLaeuft())
             {
@@ -172,8 +172,8 @@ namespace ShiftDesk
                 return;
             }
             bool datenLoeschen = !leise && Directory.Exists(Datenordner) &&
-                MessageBox.Show("Sollen auch deine zuletzt verwendeten Eingaben gelöscht werden?\n\n(Selbst gespeicherte .shiftdesk-Dateien bleiben in jedem Fall erhalten.)",
-                    "ShiftDesk deinstallieren", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+                GefahrDialog.Fragen(null, "Sollen auch deine zuletzt verwendeten Eingaben gelöscht werden?",
+                    "Selbst gespeicherte .shiftdesk-Dateien bleiben in jedem Fall erhalten.", "Löschen", "trash-2", "Behalten");
 
             try { if (File.Exists(Verknuepfung)) File.Delete(Verknuepfung); } catch { }
             try { Registry.CurrentUser.DeleteSubKeyTree(RegistryPfad, false); } catch { }

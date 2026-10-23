@@ -182,13 +182,15 @@ namespace ShiftDesk
             {
                 Tuple.Create("Neu", "file-plus", (Action)(() =>
                 {
-                    if (!Frage("Alle Eingaben löschen und neu beginnen?")) return;
+                    if (!GefahrDialog.Fragen(this, "Alle Eingaben löschen und neu beginnen?",
+                        "Was nicht als Datei gespeichert ist, geht verloren.", "Alles löschen", "trash-2")) return;
                     dateiPfad = null;
                     Anzeigen(new Konfiguration { Start = DateTime.Today, Ende = DateTime.Today.AddDays(1) });
                 })),
                 Tuple.Create("Beispiel laden", "rotate-ccw", (Action)(() =>
                 {
-                    if (!Frage("Alle Eingaben durch das Beispiel ersetzen?")) return;
+                    if (!GefahrDialog.Fragen(this, "Alle Eingaben durch das Beispiel ersetzen?",
+                        "Was nicht als Datei gespeichert ist, geht verloren.", "Ersetzen")) return;
                     dateiPfad = null;
                     Anzeigen(Konfiguration.Beispiel());
                 })),
@@ -880,14 +882,24 @@ namespace ShiftDesk
             foreach (var ed in editoren) ed.Schliessen(true);
             var zeilen = g.SelectedCells.Cast<DataGridViewCell>().Select(c => c.RowIndex).Distinct().OrderByDescending(i => i).ToList();
             if (zeilen.Count == 0 && g.CurrentCell != null) zeilen.Add(g.CurrentCell.RowIndex);
-            if (zeilen.Count > 1 && !Frage(zeilen.Count + " Zeilen entfernen?")) return;
+            if (zeilen.Count == 0 || !LoeschenBestaetigt(g, zeilen)) return;
             foreach (int i in zeilen) g.Rows.RemoveAt(i);
         }
 
         void Entfernen(DataGridView g, int zeile)
         {
             foreach (var ed in editoren) ed.Schliessen(true);
-            if (zeile >= 0 && zeile < g.Rows.Count) g.Rows.RemoveAt(zeile);
+            if (zeile < 0 || zeile >= g.Rows.Count || !LoeschenBestaetigt(g, new List<int> { zeile })) return;
+            g.Rows.RemoveAt(zeile);
+        }
+
+        // Mit gedrückter Ctrl-Taste wird ohne Nachfrage gelöscht
+        bool LoeschenBestaetigt(DataGridView g, List<int> zeilen)
+        {
+            if ((ModifierKeys & Keys.Control) != 0) return true;
+            string name = zeilen.Count == 1 ? Wert(g.Rows[zeilen[0]], "Name") : "";
+            string titel = zeilen.Count > 1 ? zeilen.Count + " Zeilen löschen?" : name != "" ? "«" + name + "» löschen?" : "Diese Zeile löschen?";
+            return GefahrDialog.Fragen(this, titel, "Tipp: Mit gedrückter Ctrl-Taste wird ohne Nachfrage gelöscht.", "Löschen", "trash-2");
         }
 
         // ---------------------------------------------------------------- Daten <-> Oberfläche

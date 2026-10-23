@@ -99,6 +99,8 @@ namespace ShiftDesk
     {
         public string Icon;
         public bool Primaer;
+        public bool Gefahr;        // rot gefüllt (Löschen u. ä.)
+        public bool Fokusrahmen;   // Tastaturfokus sichtbar machen (in Dialogen)
         bool hover;
 
         public ModernButton(string text, string icon, bool primaer = false)
@@ -127,6 +129,24 @@ namespace ShiftDesk
         protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        // Enter und Leertaste lösen den Knopf mit Fokus aus
+        protected override bool IsInputKey(Keys k)
+        {
+            return k == Keys.Enter || k == Keys.Space || base.IsInputKey(k);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                OnClick(EventArgs.Empty);
+            }
+            base.OnKeyDown(e);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -135,14 +155,18 @@ namespace ShiftDesk
             var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
             float radius = Theme.S(8);
             bool aktiv = hover && Enabled;
-            if (Primaer)
+            if (Gefahr)
+                Formen.Fuellen(g, r, radius, aktiv ? Theme.GefahrKnopfHover : Theme.GefahrKnopf);
+            else if (Primaer)
                 Formen.Fuellen(g, r, radius, aktiv ? Theme.AkzentHover : Theme.Akzent);
             else
             {
                 Formen.Fuellen(g, r, radius, aktiv ? Theme.Hover : Theme.Karte);
                 Formen.Umrandung(g, r, radius, Theme.EingabeRand);
             }
-            Color farbe = !Enabled ? Theme.Gedaempft : Primaer ? Theme.AkzentText : Theme.Text;
+            if (Fokusrahmen && Focused)
+                Formen.Umrandung(g, new RectangleF(1.5f, 1.5f, Width - 3, Height - 3), radius - 1, Theme.Akzent, 2f);
+            Color farbe = !Enabled ? Theme.Gedaempft : Primaer || Gefahr ? Theme.AkzentText : Theme.Text;
             int icon = Theme.S(16), luecke = string.IsNullOrEmpty(Text) || Icon == null ? 0 : Theme.S(8);
             int text = string.IsNullOrEmpty(Text) ? 0 : TextRenderer.MeasureText(g, Text, Font, Size, TextFormatFlags.NoPadding).Width;
             int breite = (Icon != null ? icon : 0) + luecke + text;

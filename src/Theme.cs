@@ -13,7 +13,7 @@ namespace ShiftDesk
         public static float Skala { get; private set; }
 
         public static Color Hintergrund, Seitenleiste, Karte, Rand, Text, Gedaempft, Hover, Auswahl,
-            Akzent, AkzentHover, AkzentText, Eingabe, EingabeRand, Gitter, SchalterAus, Erfolg, Warnung, Gefahr, Vorschau;
+            Akzent, AkzentHover, AkzentText, Eingabe, EingabeRand, Gitter, SchalterAus, Erfolg, Warnung, Gefahr, GefahrKnopf, GefahrKnopfHover, Vorschau;
 
         public static event EventHandler Geaendert;
 
@@ -83,6 +83,8 @@ namespace ShiftDesk
                 Erfolg = Hex(0x34C77B);
                 Warnung = Hex(0xF2B13C);
                 Gefahr = Hex(0xF87171);
+                GefahrKnopf = Hex(0xDC2626);
+                GefahrKnopfHover = Hex(0xEF4444);
                 Vorschau = Hex(0x0C0D11);
             }
             else
@@ -104,6 +106,8 @@ namespace ShiftDesk
                 Erfolg = Hex(0x16A34A);
                 Warnung = Hex(0xD97706);
                 Gefahr = Hex(0xDC2626);
+                GefahrKnopf = Hex(0xDC2626);
+                GefahrKnopfHover = Hex(0xB91C1C);
                 Vorschau = Hex(0xE6E9EE);
             }
             AkzentText = Color.White;
