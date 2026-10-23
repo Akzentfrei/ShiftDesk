@@ -1,0 +1,383 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+
+namespace ShiftDesk
+{
+    public class Plan
+    {
+        public const int FREI = -1;
+        public const int RUHE = -2;
+
+        public Konfiguration Cfg;
+        public DateTime Start;
+        public int Stunden;
+        public List<Person> Zeilen = new List<Person>();
+        public int[] Block;       // Zeilen mit gleichen erlaubten Posten bilden einen Block (Abstand im Plan)
+        public int[,] Z;          // [Zeile, Stunde] -> Postenindex, FREI oder RUHE
+        public bool[,] Essen;     // [Zeile, Stunde] -> isst in dieser Stunde
+        public List<Person> NichtEingeteilt = new List<Person>();
+        public List<string> Warnungen = new List<string>();
+
+        public int Seiten
+        {
+            get { return (Stunden + 23) / 24; }
+        }
+    }
+
+    public class Planer
+    {
+        static readonly CultureInfo De = new CultureInfo("de-CH");
+        const double SPERRE = 1e6;    // Person darf diesen Posten nicht besetzen
+        const double LEER = 1e4;      // Platz bleibt unbesetzt
+
+        readonly Konfiguration cfg;
+        readonly Plan plan;
+        readonly Random rnd;
+        readonly int[,] anzahl;     // wie oft war Zeile r schon auf Posten k
+        readonly long[] gegessen;   // Schlüssel des Essensfensters, in dem Zeile r zuletzt gegessen hat
+        readonly bool[] kannEssen;  // Funktion darf auf mindestens einen Posten mit Essen
+        Gruppe[] gruppe;
+
+        // Essensfenster der aktuellen Stunde
+        bool essenAktiv;
+        long essenSchluessel;
+        int essenRestStunden;
+        DateTime essenBeginn, essenEnde;
+
+        Planer(Konfiguration cfg, Plan plan, int seed)
+        {
+            this.cfg = cfg;
+            this.plan = plan;
+            rnd = new Random(seed);
+            anzahl = new int[plan.Zeilen.Count, cfg.Posten.Count];
+            gegessen = new long[plan.Zeilen.Count];
+            kannEssen = plan.Zeilen.Select(p => cfg.Posten.Any(k => k.EssenMoeglich && k.Erlaubt(p.Funktion))).ToArray();
+        }
+
+        public static Plan Erstelle(Konfiguration cfg, int seed)
+        {
+            var plan = new Plan();
+            plan.Cfg = cfg;
+            plan.Start = AufStundeRunden(cfg.Start);
+            DateTime ende = AufStundeRunden(cfg.Ende);
+            if (cfg.Ende > ende) ende = ende.AddHours(1);   // angebrochene Stunde mitnehmen
+            plan.Stunden = (int)Math.Round((ende - plan.Start).TotalHours);
+            if (plan.Stunden <= 0)
+                throw new Exception("Das Ende muss nach dem Start liegen.");
+            if (plan.Stunden > 24 * 31)
+                throw new Exception("Ein Plan darf höchstens 31 Tage lang sein.");
+
+            Func<Person, int> funktionIndex = p =>
+            {
+                int i = cfg.Funktionen.FindIndex(f => f.Name == p.Funktion);
+                return i < 0 ? int.MaxValue : i;
+            };
+            Func<Person, int> gruppenIndex = p =>
+            {
+                int i = cfg.Gruppen.FindIndex(g => g.Name == p.Gruppe);
+                return i < 0 ? int.MaxValue : i;
+            };
+            plan.Zeilen = cfg.Personen.Where(cfg.ImPlan)
+                .Select((p, i) => new { p, i })
+                .OrderBy(x => funktionIndex(x.p)).ThenBy(x => gruppenIndex(x.p)).ThenBy(x => x.i)
+                .Select(x => x.p).ToList();
+            plan.NichtEingeteilt = cfg.Personen.Where(p => !cfg.ImPlan(p)).ToList();
+            if (plan.Zeilen.Count == 0)
+                throw new Exception("Es sind keine Personen erfasst, die eingeteilt werden.");
+
+            // Blöcke: gleiche Menge erlaubter Posten
+            Func<Person, string> schluessel = p => string.Join("|", Enumerable.Range(0, cfg.Posten.Count).Where(k => cfg.Posten[k].Erlaubt(p.Funktion)));
+            plan.Block = new int[plan.Zeilen.Count];
+            for (int r = 1; r < plan.Zeilen.Count; r++)
+                plan.Block[r] = plan.Block[r - 1] + (schluessel(plan.Zeilen[r]) == schluessel(plan.Zeilen[r - 1]) ? 0 : 1);
+
+            plan.Z = new int[plan.Zeilen.Count, plan.Stunden];
+            plan.Essen = new bool[plan.Zeilen.Count, plan.Stunden];
+
+            new Planer(cfg, plan, seed).Rechnen();
+            return plan;
+        }
+
+        static DateTime AufStundeRunden(DateTime d)
+        {
+            return new DateTime(d.Year, d.Month, d.Day, d.Hour, 0, 0);
+        }
+
+        void Rechnen()
+        {
+            int n = plan.Zeilen.Count;
+            gruppe = new Gruppe[n];
+            for (int r = 0; r < n; r++)
+            {
+                var p = plan.Zeilen[r];
+                gruppe[r] = cfg.Gruppen.FirstOrDefault(g => g.Name == p.Gruppe);
+                if (gruppe[r] == null)
+                    plan.Warnungen.Add(Name(r) + ": keine gültige Gruppe, ist darum nie in Ruhe.");
+                if (!cfg.Funktionen.Any(f => f.Name == p.Funktion))
+                    plan.Warnungen.Add(Name(r) + ": unbekannte Funktion «" + p.Funktion + "».");
+                else if (!cfg.Posten.Any(k => k.Erlaubt(p.Funktion)))
+                    plan.Warnungen.Add(Name(r) + ": kein Posten erlaubt die Funktion «" + p.Funktion + "».");
+            }
+
+            var unterbesetzt = new Dictionary<int, List<int>>();   // Posten -> Stunden
+            var essenGesehen = new Dictionary<long, HashSet<int>>();
+            var essenName = new Dictionary<long, string>();
+
+            for (int t = 0; t < plan.Stunden; t++)
+            {
+                DateTime zeit = plan.Start.AddHours(t);
+                int h = zeit.Hour;
+
+                for (int r = 0; r < n; r++)
+                    plan.Z[r, t] = gruppe[r] != null && gruppe[r].RuhtUm(h) ? Plan.RUHE : Plan.FREI;
+
+                EssensfensterBestimmen(zeit, essenName);
+
+                var zeilen = Enumerable.Range(0, n).Where(r => plan.Z[r, t] == Plan.FREI).ToList();
+                int takt = Math.Max(1, cfg.AbloesungStunden);
+                Zuteilen(t, h, zeilen, unterbesetzt, takt > 1 && t > 0 && h % takt != 0);
+
+                if (essenAktiv)
+                {
+                    HashSet<int> gesehen;
+                    if (!essenGesehen.TryGetValue(essenSchluessel, out gesehen))
+                        essenGesehen[essenSchluessel] = gesehen = new HashSet<int>();
+                    foreach (int r in zeilen.Where(r => kannEssen[r] && BrauchtEssen(r, t)))
+                    {
+                        gesehen.Add(r);
+                        int k = plan.Z[r, t];
+                        if (k >= 0 && cfg.Posten[k].EssenMoeglich && gegessen[r] != essenSchluessel)
+                        {
+                            plan.Essen[r, t] = true;
+                            gegessen[r] = essenSchluessel;
+                        }
+                    }
+                    if (essenRestStunden == 1 && essenBeginn >= plan.Start)
+                        foreach (int r in gesehen.Where(r => gegessen[r] != essenSchluessel))
+                            plan.Warnungen.Add(Name(r) + ": kein Essen bei " + essenName[essenSchluessel]);
+                }
+            }
+
+            foreach (var e in unterbesetzt.OrderByDescending(e => e.Key))
+            {
+                var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
+                plan.Warnungen.Insert(0, "Posten «" + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
+                    " Stunde(n) nicht voll besetzt: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
+            }
+        }
+
+        void EssensfensterBestimmen(DateTime zeit, Dictionary<long, string> namen)
+        {
+            essenAktiv = false;
+            int h = zeit.Hour;
+            for (int i = 0; i < cfg.Essenszeiten.Count; i++)
+            {
+                var e = cfg.Essenszeiten[i];
+                if (e.Von == e.Bis || !Zeit.InFenster(h, e.Von, e.Bis))
+                    continue;
+                DateTime beginn = zeit.Date.AddHours(e.Von);
+                if (h < e.Von) beginn = beginn.AddDays(-1);
+                essenAktiv = true;
+                essenSchluessel = beginn.Ticks + i + 1;
+                essenRestStunden = (e.Bis - h + 24) % 24;
+                essenBeginn = beginn;
+                essenEnde = zeit.AddHours(essenRestStunden);
+                namen[essenSchluessel] = e.Name + " " + beginn.ToString("ddd dd.MM.", De);
+                return;
+            }
+        }
+
+        // Teilt die verfügbaren Personen einer Stunde den Posten zu (Ungarische Methode).
+        // Spalten: zu besetzende Plätze + je ein «Rest»-Platz pro Person (Auffangposten oder frei).
+        // Zusätzliche Leer-Zeilen erlauben es, Plätze unbesetzt zu lassen, wenn Leute fehlen.
+        void Zuteilen(int t, int h, List<int> zeilen, Dictionary<int, List<int>> unterbesetzt, bool fortsetzen)
+        {
+            var plaetze = new List<int>();
+            for (int k = 0; k < cfg.Posten.Count; k++)
+            {
+                var p = cfg.Posten[k];
+                if (p.Typ != PostenTyp.Auffang && p.OffenUm(h))
+                    for (int i = 0; i < p.Anzahl; i++)
+                        plaetze.Add(k);
+            }
+
+            // Mitten in einer Ablösung: wer schon im Dienst war, bleibt auf seinem Posten (sofern er noch offen ist)
+            if (fortsetzen)
+            {
+                var bleiben = new List<int>();
+                foreach (int r in zeilen)
+                {
+                    int k = plan.Z[r, t - 1];
+                    if (k < 0) continue;
+                    var p = cfg.Posten[k];
+                    if (!p.OffenUm(h) || !p.Erlaubt(plan.Zeilen[r].Funktion)) continue;
+                    if (p.Typ != PostenTyp.Auffang)
+                    {
+                        int i = plaetze.IndexOf(k);
+                        if (i < 0) continue;
+                        plaetze.RemoveAt(i);
+                    }
+                    plan.Z[r, t] = k;
+                    anzahl[r, k]++;
+                    bleiben.Add(r);
+                }
+                zeilen = zeilen.Except(bleiben).ToList();
+            }
+            int n = zeilen.Count, m = plaetze.Count, N = n + m;
+            if (N == 0) return;
+
+            // Durchschnitt pro Posten unter den Personen, die ihn besetzen dürfen
+            var schnitt = new double[cfg.Posten.Count];
+            for (int k = 0; k < cfg.Posten.Count; k++)
+            {
+                var erlaubt = zeilen.Where(r => cfg.Posten[k].Erlaubt(plan.Zeilen[r].Funktion)).ToList();
+                schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
+            }
+            var rest = zeilen.Select(r => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && p.Erlaubt(plan.Zeilen[r].Funktion))).ToArray();
+
+            var kosten = new double[N, N];
+            for (int i = 0; i < N; i++)
+                for (int j = 0; j < N; j++)
+                {
+                    if (i < n && j < m)
+                        kosten[i, j] = cfg.Posten[plaetze[j]].Erlaubt(plan.Zeilen[zeilen[i]].Funktion)
+                            ? Kosten(zeilen[i], plaetze[j], t, schnitt) : SPERRE;
+                    else if (i < n)
+                        kosten[i, j] = Kosten(zeilen[i], rest[i], t, schnitt);
+                    else if (j < m)
+                        kosten[i, j] = LEER + (m - j) * 100;  // wichtigere Posten (weiter oben) immer zuerst besetzen
+                    else
+                        kosten[i, j] = 0;
+                }
+
+            int[] wahl = Ungarisch(kosten, N);
+            var besetzt = new bool[m];
+            for (int i = 0; i < n; i++)
+            {
+                int j = wahl[i];
+                int k = j < m ? plaetze[j] : rest[i];
+                if (j < m) besetzt[j] = true;
+                plan.Z[zeilen[i], t] = k;
+                if (k >= 0) anzahl[zeilen[i], k]++;
+            }
+            for (int j = 0; j < m; j++)
+            {
+                if (besetzt[j]) continue;
+                List<int> liste;
+                if (!unterbesetzt.TryGetValue(plaetze[j], out liste))
+                    unterbesetzt[plaetze[j]] = liste = new List<int>();
+                if (liste.Count == 0 || liste[liste.Count - 1] != t) liste.Add(t);
+            }
+        }
+
+        double Kosten(int r, int k, int t, double[] schnitt)
+        {
+            double c = rnd.NextDouble() * 0.3;
+            if (k < 0) return c;
+            int vorher = t > 0 ? plan.Z[r, t - 1] : Plan.RUHE;
+            int takt = Math.Max(1, cfg.AbloesungStunden);
+            int vorvorher = t > takt ? plan.Z[r, t - 1 - takt] : Plan.RUHE;   // Posten vor der letzten Ablösung
+            var posten = cfg.Posten[k];
+
+            if (posten.AmStueck)
+            {
+                // z. B. Wacht Kdt: möglichst am Stück
+                if (vorher == k) c -= 5;
+                c += 0.5 * (anzahl[r, k] - schnitt[k]);
+            }
+            else
+            {
+                // jede Stunde ein anderer Posten, und gerecht verteilt
+                if (vorher == k) c += 10;
+                if (vorvorher == k) c += 3;
+                c += 4 * (anzahl[r, k] - schnitt[k]);
+            }
+
+            if (essenAktiv && posten.EssenMoeglich && kannEssen[r] && BrauchtEssen(r, t))
+            {
+                if (gegessen[r] != essenSchluessel)
+                    c -= 6 + 20.0 / Math.Max(1, EssensChancen(r, t));
+                else
+                    c += 1;
+            }
+            return c;
+        }
+
+        // Wer im Essensfenster Ruhezeit hat, isst in der Ruhezeit; eingeplant werden nur die, die das ganze Fenster im Dienst sind
+        bool BrauchtEssen(int r, int t)
+        {
+            if (gruppe[r] == null) return true;
+            for (DateTime z = essenBeginn; z < essenEnde; z = z.AddHours(1))
+                if (gruppe[r].RuhtUm(z.Hour)) return false;
+            return true;
+        }
+
+        // In wie vielen der restlichen Stunden dieses Essensfensters ist die Person im Dienst?
+        int EssensChancen(int r, int t)
+        {
+            int chancen = 0;
+            for (int s = t; s < plan.Stunden; s++)
+            {
+                DateTime z = plan.Start.AddHours(s);
+                if (z >= essenEnde) break;
+                if (gruppe[r] == null || !gruppe[r].RuhtUm(z.Hour)) chancen++;
+            }
+            return chancen;
+        }
+
+        string Name(int r)
+        {
+            var p = plan.Zeilen[r];
+            return (p.Grad + " " + p.Name).Trim();
+        }
+
+        // Ungarische Methode: minimale Gesamtkosten, liefert für jede Zeile die gewählte Spalte.
+        static int[] Ungarisch(double[,] a, int n)
+        {
+            const double INF = double.MaxValue / 4;
+            var u = new double[n + 1];
+            var v = new double[n + 1];
+            var p = new int[n + 1];
+            var weg = new int[n + 1];
+            for (int i = 1; i <= n; i++)
+            {
+                p[0] = i;
+                int j0 = 0;
+                var minv = new double[n + 1];
+                var benutzt = new bool[n + 1];
+                for (int j = 0; j <= n; j++) minv[j] = INF;
+                do
+                {
+                    benutzt[j0] = true;
+                    int i0 = p[j0], j1 = 0;
+                    double delta = INF;
+                    for (int j = 1; j <= n; j++)
+                    {
+                        if (benutzt[j]) continue;
+                        double cur = a[i0 - 1, j - 1] - u[i0] - v[j];
+                        if (cur < minv[j]) { minv[j] = cur; weg[j] = j0; }
+                        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+                    }
+                    for (int j = 0; j <= n; j++)
+                    {
+                        if (benutzt[j]) { u[p[j]] += delta; v[j] -= delta; }
+                        else minv[j] -= delta;
+                    }
+                    j0 = j1;
+                } while (p[j0] != 0);
+                do
+                {
+                    int j1 = weg[j0];
+                    p[j0] = p[j1];
+                    j0 = j1;
+                } while (j0 != 0);
+            }
+            var ergebnis = new int[n];
+            for (int j = 1; j <= n; j++)
+                if (p[j] != 0) ergebnis[p[j] - 1] = j - 1;
+            return ergebnis;
+        }
+    }
+}

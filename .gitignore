@@ -1,0 +1,13 @@
+# Build-Ergebnis (mit build.bat neu erzeugen)
+*.exe
+*.pdb
+
+# Testordner und Ausgaben
+_test/
+*.pdf
+*.xlsx
+
+# Pläne und Daten mit echten Namen nicht einchecken
+Probeplan*.png
+*.shiftdesk
+letzte*.xml
