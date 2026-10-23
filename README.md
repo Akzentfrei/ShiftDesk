@@ -13,7 +13,8 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   die Anzahl des Fahrerpostens ist das Soll, gemeldet wird erst, wenn gar kein Fahrer da ist
 - **Gruppen & Ruhezeiten**: tägliche Ruhefenster, auch über Mitternacht
 - **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
-  Typ «Fahrer» (nur für Fahrer), die Pflichtposten Wacht Kdt, Presto und Subito (immer vorhanden),
+  Typ «Fahrer» (nur für Fahrer), «Pflicht» (muss immer voll besetzt sein, wird vor allen anderen besetzt),
+  die Pflichtposten Wacht Kdt, Presto und Subito (immer vorhanden),
   «Draussen» (Posten im Freien, im Plan mit Schneeflocke) und «Am Stück» (gleiche Person bleibt möglichst
   lange); die Reihenfolge ist die Wichtigkeit
 - **Feste Zweierteams** (wahlweise): je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe

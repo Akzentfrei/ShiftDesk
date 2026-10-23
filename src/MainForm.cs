@@ -388,17 +388,18 @@ namespace ShiftDesk
             gridPosten.Columns.Add(Spalte("Von", "Offen von", 58, StundenInfo()));
             gridPosten.Columns.Add(Spalte("Bis", "Offen bis", 58, StundenInfo()));
             gridPosten.Columns.Add(Spalte("Typ", "Typ", 62, new SpaltenInfo(SpaltenArt.Auswahl, () => TypListe)));
+            gridPosten.Columns.Add(Spalte("Pflicht", "Pflicht", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("Draussen", "Draussen", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("AmStueck", "Am Stück", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("Essen", "Essen", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             Zeilenknoepfe(gridPosten, true);
             Bearbeitbar(gridPosten);
             return NeueSeite("Posten",
-                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto) ist nur für Fahrer, und Fahrer sind nur dort oder in Ruhe; die Anzahl ist das Soll, gemeldet wird erst, wenn gar kein Fahrer da ist. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
+                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer; «Pflicht» = muss immer voll besetzt sein und wird vor allen anderen besetzt. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto) ist nur für Fahrer, und Fahrer sind nur dort oder in Ruhe; die Anzahl ist das Soll, gemeldet wird erst, wenn gar kein Fahrer da ist. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
                 KarteMit(gridPosten),
                 Knopf("Posten hinzufügen", "plus", () =>
                 {
-                    int i = Hinzufuegen(gridPosten, "", "", "1", "", Zeit.Text(0), Zeit.Text(0), "Normal", false, false, false);
+                    int i = Hinzufuegen(gridPosten, "", "", "1", "", Zeit.Text(0), Zeit.Text(0), "Normal", false, false, false, false);
                     gridPosten.Rows[i].Cells["Farbe"].Tag = Color.FromArgb(148, 163, 184);
                     gridPosten.Rows[i].Cells["Funktionen"].Tag = new List<string>();
                 }, true));
@@ -985,7 +986,7 @@ namespace ShiftDesk
             foreach (var p in posten)
             {
                 int i = gridPosten.Rows.Add(p.Name, "", p.Anzahl.ToString(), "", Zeit.Text(p.OffenVon), Zeit.Text(p.OffenBis),
-                    p.Typ == PostenTyp.Auffang ? "Auffang" : p.Typ == PostenTyp.Fahrer ? "Fahrer" : "Normal", p.Draussen, p.AmStueck, p.EssenMoeglich);
+                    p.Typ == PostenTyp.Auffang ? "Auffang" : p.Typ == PostenTyp.Fahrer ? "Fahrer" : "Normal", p.Pflicht, p.Draussen, p.AmStueck, p.EssenMoeglich);
                 gridPosten.Rows[i].Cells["Farbe"].Tag = Color.FromArgb(p.Farbe);
                 gridPosten.Rows[i].Cells["Funktionen"].Tag = p.Funktionen.ToList();
             }
@@ -1048,7 +1049,8 @@ namespace ShiftDesk
                     EssenMoeglich = r.Cells["Essen"].Value is bool && (bool)r.Cells["Essen"].Value,
                     AmStueck = r.Cells["AmStueck"].Value is bool && (bool)r.Cells["AmStueck"].Value,
                     Draussen = Draussen(r),
-                    Funktionen =(r.Cells["Funktionen"].Tag as List<string> ?? new List<string>()).ToList(),
+                    Pflicht = Schalter(r, "Pflicht"),
+                    Funktionen = (r.Cells["Funktionen"].Tag as List<string> ?? new List<string>()).ToList(),
                 });
             }
             return liste;
@@ -1057,6 +1059,12 @@ namespace ShiftDesk
         static IEnumerable<DataGridViewRow> Zeilen(DataGridView g)
         {
             return g.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow && Wert(r, "Name") != "");
+        }
+
+        static bool Schalter(DataGridViewRow r, string spalte)
+        {
+            object v = r.Cells[spalte].Value;
+            return v is bool && (bool)v;
         }
 
         static bool Fahrer(DataGridViewRow r)
