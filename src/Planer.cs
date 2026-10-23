@@ -54,7 +54,8 @@ namespace ShiftDesk
             rnd = new Random(seed);
             anzahl = new int[plan.Zeilen.Count, cfg.Posten.Count];
             gegessen = new long[plan.Zeilen.Count];
-            kannEssen = plan.Zeilen.Select(p => cfg.Posten.Any(k => k.EssenMoeglich && Konfiguration.Darf(p, k))).ToArray();
+            // Fahrer bekommen keine Essensstunde eingeplant: sie haben im Plan nur Presto und Ruhezeit und essen in der Ruhezeit
+            kannEssen = plan.Zeilen.Select(p => !p.Fahrer && cfg.Posten.Any(k => k.EssenMoeglich && Konfiguration.Darf(p, k))).ToArray();
         }
 
         public static Plan Erstelle(Konfiguration cfg, int seed)
@@ -277,15 +278,13 @@ namespace ShiftDesk
                     einheiten.Add(new[] { r });
             }
             Func<int[], Posten, bool> erlaubtFuer = (e, p) => e.All(r => Konfiguration.Darf(plan.Zeilen[r], p));
-            // zusätzlich als Aushilfe: Fahrer auf normalen Posten, wenn sonst niemand da ist
-            Func<int[], Posten, bool> besetzbar = (e, p) => e.All(r => Konfiguration.Darf(plan.Zeilen[r], p) || Konfiguration.Aushilfe(plan.Zeilen[r], p));
 
             // Plätze: Posten k mit Grösse g (2 = Doppelplatz für ein Team, 1 = Einzelplatz).
             // Doppelplätze nur so viele, wie Teams da sind, die den Posten besetzen dürfen (und insgesamt nicht mehr
             // als Teams); der Rest sind Einzelplätze (z. B. Fahrerposten, wenn die Fahrer einzeln sind).
             // leer[j]: Kosten, wenn der Platz unbesetzt bleibt. Wichtigere Posten (weiter oben) werden zuerst besetzt.
-            // Beim Fahrerposten muss der erste Platz unbedingt besetzt sein (mindestens ein Fahrer), die weiteren
-            // Plätze dürfen bei allgemeiner Unterbesetzung leer bleiben, damit Fahrer anderswo aushelfen können.
+            // Beim Fahrerposten ist der erste Platz am wichtigsten (mindestens ein Fahrer), die weiteren Plätze
+            // dürfen leer bleiben, wenn nicht genug Fahrer da sind.
             var plaetze = new List<int>();
             var groesse = new List<int>();
             var leer = new List<double>();
@@ -318,15 +317,14 @@ namespace ShiftDesk
                 schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
             }
             var rest = einheiten.Select(e => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && erlaubtFuer(e, p))).ToArray();
-            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen)
-                + (k >= 0 && Konfiguration.Aushilfe(plan.Zeilen[r], cfg.Posten[k]) ? AUSHILFE : 0));
+            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen));
 
             var kosten = new double[N, N];
             for (int i = 0; i < N; i++)
                 for (int j = 0; j < N; j++)
                 {
                     if (i < n && j < m)
-                        kosten[i, j] = groesse[j] == einheiten[i].Length && besetzbar(einheiten[i], cfg.Posten[plaetze[j]])
+                        kosten[i, j] = groesse[j] == einheiten[i].Length && erlaubtFuer(einheiten[i], cfg.Posten[plaetze[j]])
                             ? kostenEinheit(einheiten[i], plaetze[j]) : SPERRE;
                     else if (i < n)
                         kosten[i, j] = kostenEinheit(einheiten[i], rest[i]);
@@ -362,7 +360,6 @@ namespace ShiftDesk
             }
         }
 
-        const double AUSHILFE = 300;  // Fahrer auf einem normalen Posten: nur, wenn der Platz sonst leer bliebe
         const double BLEIBEN = 30;    // Belohnung, mitten im Block auf dem Posten zu bleiben
         const double DRAUSSEN = 80;   // Strafe, über die erlaubte Zeit hinaus draussen zu bleiben (> 2 × BLEIBEN, damit ein Tausch lohnt)
 
