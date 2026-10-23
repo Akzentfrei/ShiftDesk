@@ -19,6 +19,7 @@ namespace ShiftDesk
 
         // ShiftDesk.exe /install [/quiet]    installiert für den aktuellen Benutzer
         // ShiftDesk.exe /uninstall [/quiet]  deinstalliert wieder
+        // ShiftDesk.exe "Plan.shiftdesk"     öffnet die Datei (Doppelklick im Explorer)
         [STAThread]
         static void Main(string[] args)
         {
@@ -38,7 +39,8 @@ namespace ShiftDesk
                 Installation.Installieren(leise);
                 return;
             }
-            Application.Run(new MainForm());
+            string datei = args.FirstOrDefault(x => !x.StartsWith("/") && System.IO.File.Exists(x));
+            Application.Run(new MainForm(datei));
         }
     }
 }

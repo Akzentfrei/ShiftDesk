@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -68,6 +68,7 @@ namespace ShiftDesk
                     File.Copy(Application.ExecutablePath, Exe, true);
 
                 VerknuepfungErstellen();
+                DateizuordnungEintragen();
 
                 string version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
                 using (var k = Registry.CurrentUser.CreateSubKey(RegistryPfad))
@@ -116,6 +117,49 @@ namespace ShiftDesk
             }
         }
 
+        // .shiftdesk-Dateien per Doppelklick mit ShiftDesk öffnen (nur für den aktuellen Benutzer)
+        const string ProgId = "ShiftDesk.Datei";
+
+        [System.Runtime.InteropServices.DllImport("shell32.dll")]
+        static extern void SHChangeNotify(int ereignis, uint flags, IntPtr a, IntPtr b);
+
+        static void DateizuordnungEintragen()
+        {
+            using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Classes\.shiftdesk"))
+            {
+                k.SetValue("", ProgId);
+                k.SetValue("Content Type", "application/x-shiftdesk");
+                using (var mit = k.CreateSubKey("OpenWithProgids"))
+                    mit.SetValue(ProgId, new byte[0], RegistryValueKind.None);
+            }
+            using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Classes\" + ProgId))
+            {
+                k.SetValue("", "ShiftDesk-Plan");
+                k.SetValue("FriendlyTypeName", "ShiftDesk-Plan");
+                using (var icon = k.CreateSubKey("DefaultIcon"))
+                    icon.SetValue("", "\"" + Exe + "\",0");
+                using (var befehl = k.CreateSubKey(@"shell\open\command"))
+                    befehl.SetValue("", "\"" + Exe + "\" \"%1\"");
+            }
+            SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);   // Explorer: Symbole und Zuordnungen neu laden
+        }
+
+        static void DateizuordnungEntfernen()
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Classes\.shiftdesk", true))
+                    if (k != null && (k.GetValue("") as string) == ProgId)
+                    {
+                        k.Close();
+                        Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\.shiftdesk", false);
+                    }
+                Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + ProgId, false);
+                SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
+            }
+            catch { }
+        }
+
         public static void Deinstallieren(bool leise)
         {
             if (!leise && MessageBox.Show("ShiftDesk wirklich deinstallieren?", "ShiftDesk deinstallieren",
@@ -133,6 +177,7 @@ namespace ShiftDesk
 
             try { if (File.Exists(Verknuepfung)) File.Delete(Verknuepfung); } catch { }
             try { Registry.CurrentUser.DeleteSubKeyTree(RegistryPfad, false); } catch { }
+            DateizuordnungEntfernen();
             if (datenLoeschen)
                 try { Directory.Delete(Datenordner, true); } catch { }
 

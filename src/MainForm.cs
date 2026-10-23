@@ -68,7 +68,7 @@ namespace ShiftDesk
         Panel warnAbstand;
         HinweisListe lstWarnungen;
 
-        public MainForm()
+        public MainForm(string datei = null)
         {
             Text = "ShiftDesk";
             Font = new Font("Segoe UI", 9.5f);
@@ -111,6 +111,7 @@ namespace ShiftDesk
             }
             catch { }
             Anzeigen(geladen ?? Konfiguration.Beispiel());
+            if (datei != null) DateiOeffnen(datei);
             Zeigen(navigation.First(n => n.Value == seitePersonen).Key);
 
             EventHandler themaGeaendert = (s, e) =>
@@ -1322,17 +1323,23 @@ namespace ShiftDesk
         {
             using (var dlg = new OpenFileDialog { Filter = "ShiftDesk-Datei (*.shiftdesk)|*.shiftdesk|Alle Dateien|*.*" })
             {
-                if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                try
-                {
-                    var k = Konfiguration.Laden(dlg.FileName);
-                    dateiPfad = dlg.FileName;
-                    Anzeigen(k);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(this, "Die Datei konnte nicht geöffnet werden:\n" + ex.Message, "Öffnen", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                    DateiOeffnen(dlg.FileName);
+            }
+        }
+
+        // Eine .shiftdesk-Datei laden (Menü «Öffnen…» oder Doppelklick im Explorer)
+        void DateiOeffnen(string pfad)
+        {
+            try
+            {
+                var k = Konfiguration.Laden(pfad);
+                dateiPfad = pfad;
+                Anzeigen(k);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Die Datei konnte nicht geöffnet werden:\n" + ex.Message, "Öffnen", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
