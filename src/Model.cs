@@ -89,6 +89,8 @@ namespace ShiftDesk
         public DateTime Start;
         public DateTime Ende;
         public int AbloesungStunden = 1;   // Posten wechseln alle X Stunden (ab Mitternacht gerechnet)
+        public int StuendlichVon;          // in diesem Zeitfenster wird trotzdem jede Stunde abgelöst (von == bis: kein Fenster)
+        public int StuendlichBis;
         public int DraussenMaxStunden = 2; // höchstens so viele Stunden am Stück auf Posten im Freien (0 = keine Grenze)
         public List<Funktion> Funktionen = new List<Funktion>();
         public List<string> Grade = new List<string>();
@@ -96,6 +98,14 @@ namespace ShiftDesk
         public List<Gruppe> Gruppen = new List<Gruppe>();
         public List<Posten> Posten = new List<Posten>();
         public List<Essenszeit> Essenszeiten = new List<Essenszeit>();
+
+        // Alle wie viele Stunden wird um diese Stunde abgelöst? Im stündlichen Fenster (inklusive seiner Endstunde,
+        // damit der letzte stündliche Block dort endet) ist es 1, sonst die eingestellte Ablösung.
+        public int TaktUm(int stunde)
+        {
+            bool stuendlich = StuendlichVon != StuendlichBis && (Zeit.InFenster(stunde, StuendlichVon, StuendlichBis) || stunde == StuendlichBis);
+            return stuendlich ? 1 : Math.Max(1, AbloesungStunden);
+        }
 
         public bool ImPlan(Person p)
         {

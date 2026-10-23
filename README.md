@@ -17,7 +17,8 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   Ablöseblöcken tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis
 - **Essenszeiten**: jede Person, die das ganze Fenster im Dienst ist, bekommt eine Essensstunde auf einem
   Posten mit «Essen möglich»
-- **Plan** über mehrere Tage, Ablösung jede Stunde oder alle 2–4 Stunden, jede Erstellung ergibt eine neue
+- **Plan** über mehrere Tage, Ablösung jede Stunde oder alle 2–4 Stunden, wahlweise mit einem Zeitfenster
+  (z. B. 00:00 bis 06:00), in dem trotzdem jede Stunde abgelöst wird; jede Erstellung ergibt eine neue
   faire Variante (Zuteilung mit der Ungarischen Methode)
 - Vorschau mit Zoom (Mausrad, Doppelklick), Drucken, PDF (Microsoft Print to PDF) und Excel (.xlsx)
 - Statistik pro Person und Posten

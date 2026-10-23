@@ -144,7 +144,7 @@ namespace ShiftDesk
                 EssensfensterBestimmen(zeit, essenName);
 
                 var zeilen = Enumerable.Range(0, n).Where(r => plan.Z[r, t] == Plan.FREI).ToList();
-                int takt = Math.Max(1, cfg.AbloesungStunden);
+                int takt = cfg.TaktUm(h);
                 Zuteilen(t, h, zeilen, unterbesetzt, takt > 1 && t > 0 && h % takt != 0);
 
                 if (essenAktiv)
@@ -310,7 +310,7 @@ namespace ShiftDesk
             double c = rnd.NextDouble() * 0.3;
             if (k < 0) return c;
             int vorher = t > 0 ? plan.Z[r, t - 1] : Plan.RUHE;
-            int takt = Math.Max(1, cfg.AbloesungStunden);
+            int takt = cfg.TaktUm(plan.Start.AddHours(t).Hour);
             int vorvorher = t > takt ? plan.Z[r, t - 1 - takt] : Plan.RUHE;   // Posten vor der letzten Ablösung
             var posten = cfg.Posten[k];
 

@@ -52,7 +52,7 @@ namespace ShiftDesk
         Panel seitePersonen, seitePlan;
         Eingabefeld txtName;
         DatumFeld dtStart, dtEnde;
-        AuswahlFeld abloesung, draussen;
+        AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis;
         static readonly string[] AbloesungListe = { "Jede Stunde", "Alle 2 Stunden", "Alle 3 Stunden", "Alle 4 Stunden" };
         // Index = erlaubte Stunden am Stück draussen, 0 = keine Grenze
         static readonly string[] DraussenListe = { "Keine Grenze", "Höchstens 1 Stunde", "Höchstens 2 Stunden", "Höchstens 3 Stunden", "Höchstens 4 Stunden", "Höchstens 6 Stunden" };
@@ -428,6 +428,10 @@ namespace ShiftDesk
             felder.Controls.Add(Feld("Ende", dtEnde));
             abloesung = new AuswahlFeld(AbloesungListe) { Width = Theme.S(170) };
             felder.Controls.Add(Feld("Ablösung", abloesung));
+            stuendlichVon = new AuswahlFeld(StundenListe) { Width = Theme.S(100) };
+            stuendlichBis = new AuswahlFeld(StundenListe) { Width = Theme.S(100) };
+            felder.Controls.Add(Feld("Jede Stunde von", stuendlichVon));
+            felder.Controls.Add(Feld("bis", stuendlichBis));
             draussen = new AuswahlFeld(DraussenListe) { Width = Theme.S(190) };
             felder.Controls.Add(Feld("Am Stück draussen", draussen));
             var einstellungen = KarteMit(felder);
@@ -530,7 +534,7 @@ namespace ShiftDesk
             koerper.Controls.Add(einstellungen);
 
             return NeueSeite("Plan",
-                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
+                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
                 koerper,
                 Knopf("Drucken", "printer", Drucken),
                 Knopf("Als PDF", "file-down", AlsPdf),
@@ -939,6 +943,8 @@ namespace ShiftDesk
             dtStart.Wert = k.Start > new DateTime(2000, 1, 1) ? k.Start : DateTime.Today;
             dtEnde.Wert = k.Ende > new DateTime(2000, 1, 1) ? k.Ende : DateTime.Today.AddDays(1);
             abloesung.Index = Math.Min(AbloesungListe.Length, Math.Max(1, k.AbloesungStunden)) - 1;
+            stuendlichVon.Index = Math.Max(0, Math.Min(23, k.StuendlichVon));
+            stuendlichBis.Index = Math.Max(0, Math.Min(23, k.StuendlichBis));
             int d = Array.IndexOf(DraussenStunden, k.DraussenMaxStunden);
             if (d < 0) d = k.DraussenMaxStunden <= 0 ? 0 : DraussenStunden.Length - 1;
             draussen.Index = d;
@@ -975,6 +981,8 @@ namespace ShiftDesk
                 Start = dtStart.Wert,
                 Ende = dtEnde.Wert,
                 AbloesungStunden = abloesung.Index + 1,
+                StuendlichVon = stuendlichVon.Index,
+                StuendlichBis = stuendlichBis.Index,
                 DraussenMaxStunden = DraussenStunden[draussen.Index],
             };
             foreach (var r in Zeilen(gridFunktionen))
