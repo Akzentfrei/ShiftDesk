@@ -10,8 +10,11 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   «Im Plan einteilen» erscheinen nur als «Nicht eingeteilt» unten auf dem Plan
 - **Personen** mit Grad, Funktion und Ruhegruppe
 - **Gruppen & Ruhezeiten**: tägliche Ruhefenster, auch über Mitternacht
-- **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute)
-  und «Am Stück» (gleiche Person bleibt möglichst lange); die Reihenfolge ist die Wichtigkeit
+- **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
+  «Draussen» (Posten im Freien, im Plan mit Schneeflocke) und «Am Stück» (gleiche Person bleibt möglichst
+  lange); die Reihenfolge ist die Wichtigkeit
+- **Gesunderhaltung**: niemand ist länger als eingestellt (z. B. 2 Stunden) am Stück draussen; bei längeren
+  Ablöseblöcken tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis
 - **Essenszeiten**: jede Person, die das ganze Fenster im Dienst ist, bekommt eine Essensstunde auf einem
   Posten mit «Essen möglich»
 - **Plan** über mehrere Tage, Ablösung jede Stunde oder alle 2–4 Stunden, jede Erstellung ergibt eine neue

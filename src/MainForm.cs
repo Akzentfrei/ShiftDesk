@@ -52,8 +52,11 @@ namespace ShiftDesk
         Panel seitePersonen, seitePlan;
         Eingabefeld txtName;
         DatumFeld dtStart, dtEnde;
-        AuswahlFeld abloesung;
+        AuswahlFeld abloesung, draussen;
         static readonly string[] AbloesungListe = { "Jede Stunde", "Alle 2 Stunden", "Alle 3 Stunden", "Alle 4 Stunden" };
+        // Index = erlaubte Stunden am Stück draussen, 0 = keine Grenze
+        static readonly string[] DraussenListe = { "Keine Grenze", "Höchstens 1 Stunde", "Höchstens 2 Stunden", "Höchstens 3 Stunden", "Höchstens 4 Stunden", "Höchstens 6 Stunden" };
+        static readonly int[] DraussenStunden = { 0, 1, 2, 3, 4, 6 };
         ZoomPanel vorschau;
         Label lblZoom;
         ModernButton btnEinpassen;
@@ -375,23 +378,24 @@ namespace ShiftDesk
         Panel SeitePosten()
         {
             gridPosten = NeuesGrid();
-            gridPosten.Columns.Add(Spalte("Name", "Posten", 105, new SpaltenInfo(SpaltenArt.Text)));
+            gridPosten.Columns.Add(Spalte("Name", "Posten", 105, new SpaltenInfo(SpaltenArt.Text) { Symbol = r => Draussen(r) ? "snowflake" : null }));
             gridPosten.Columns.Add(Spalte("Farbe", "Farbe", 55, new SpaltenInfo(SpaltenArt.Farbe)));
             gridPosten.Columns.Add(Spalte("Anzahl", "Personen", 48, new SpaltenInfo(SpaltenArt.Zahl)));
             gridPosten.Columns.Add(Spalte("Funktionen", "Funktionen", 125, new SpaltenInfo(SpaltenArt.Mehrfach, () => Namen(gridFunktionen), s => s == "" ? "Alle" : s)));
             gridPosten.Columns.Add(Spalte("Von", "Offen von", 58, StundenInfo()));
             gridPosten.Columns.Add(Spalte("Bis", "Offen bis", 58, StundenInfo()));
             gridPosten.Columns.Add(Spalte("Typ", "Typ", 62, new SpaltenInfo(SpaltenArt.Auswahl, () => TypListe)));
+            gridPosten.Columns.Add(Spalte("Draussen", "Draussen", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("AmStueck", "Am Stück", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("Essen", "Essen", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             Zeilenknoepfe(gridPosten, true);
             Bearbeitbar(gridPosten);
             return NeueSeite("Posten",
-                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. «Am Stück» = gleiche Person bleibt möglichst lange.",
+                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
                 KarteMit(gridPosten),
                 Knopf("Posten hinzufügen", "plus", () =>
                 {
-                    int i = Hinzufuegen(gridPosten, "", "", "1", "", Zeit.Text(0), Zeit.Text(0), "Normal", false, false);
+                    int i = Hinzufuegen(gridPosten, "", "", "1", "", Zeit.Text(0), Zeit.Text(0), "Normal", false, false, false);
                     gridPosten.Rows[i].Cells["Farbe"].Tag = Color.FromArgb(148, 163, 184);
                     gridPosten.Rows[i].Cells["Funktionen"].Tag = new List<string>();
                 }, true));
@@ -424,6 +428,8 @@ namespace ShiftDesk
             felder.Controls.Add(Feld("Ende", dtEnde));
             abloesung = new AuswahlFeld(AbloesungListe) { Width = Theme.S(170) };
             felder.Controls.Add(Feld("Ablösung", abloesung));
+            draussen = new AuswahlFeld(DraussenListe) { Width = Theme.S(190) };
+            felder.Controls.Add(Feld("Am Stück draussen", draussen));
             var einstellungen = KarteMit(felder);
             einstellungen.Dock = DockStyle.Top;
             einstellungen.Padding = new Padding(Theme.S(18), Theme.S(14), Theme.S(18), Theme.S(10));
@@ -933,6 +939,9 @@ namespace ShiftDesk
             dtStart.Wert = k.Start > new DateTime(2000, 1, 1) ? k.Start : DateTime.Today;
             dtEnde.Wert = k.Ende > new DateTime(2000, 1, 1) ? k.Ende : DateTime.Today.AddDays(1);
             abloesung.Index = Math.Min(AbloesungListe.Length, Math.Max(1, k.AbloesungStunden)) - 1;
+            int d = Array.IndexOf(DraussenStunden, k.DraussenMaxStunden);
+            if (d < 0) d = k.DraussenMaxStunden <= 0 ? 0 : DraussenStunden.Length - 1;
+            draussen.Index = d;
 
             plan = null;
             seite = 0;
@@ -950,7 +959,7 @@ namespace ShiftDesk
             foreach (var p in posten)
             {
                 int i = gridPosten.Rows.Add(p.Name, "", p.Anzahl.ToString(), "", Zeit.Text(p.OffenVon), Zeit.Text(p.OffenBis),
-                    p.Typ == PostenTyp.Auffang ? "Auffang" : "Normal", p.AmStueck, p.EssenMoeglich);
+                    p.Typ == PostenTyp.Auffang ? "Auffang" : "Normal", p.Draussen, p.AmStueck, p.EssenMoeglich);
                 gridPosten.Rows[i].Cells["Farbe"].Tag = Color.FromArgb(p.Farbe);
                 gridPosten.Rows[i].Cells["Funktionen"].Tag = p.Funktionen.ToList();
             }
@@ -966,6 +975,7 @@ namespace ShiftDesk
                 Start = dtStart.Wert,
                 Ende = dtEnde.Wert,
                 AbloesungStunden = abloesung.Index + 1,
+                DraussenMaxStunden = DraussenStunden[draussen.Index],
             };
             foreach (var r in Zeilen(gridFunktionen))
                 k.Funktionen.Add(new Funktion { Name = Wert(r, "Name"), ImPlan = r.Cells["ImPlan"].Value is bool && (bool)r.Cells["ImPlan"].Value });
@@ -1007,7 +1017,8 @@ namespace ShiftDesk
                     Typ = typ,
                     EssenMoeglich = r.Cells["Essen"].Value is bool && (bool)r.Cells["Essen"].Value,
                     AmStueck = r.Cells["AmStueck"].Value is bool && (bool)r.Cells["AmStueck"].Value,
-                    Funktionen = (r.Cells["Funktionen"].Tag as List<string> ?? new List<string>()).ToList(),
+                    Draussen = Draussen(r),
+                    Funktionen =(r.Cells["Funktionen"].Tag as List<string> ?? new List<string>()).ToList(),
                 });
             }
             return liste;
@@ -1016,6 +1027,12 @@ namespace ShiftDesk
         static IEnumerable<DataGridViewRow> Zeilen(DataGridView g)
         {
             return g.Rows.Cast<DataGridViewRow>().Where(r => !r.IsNewRow && Wert(r, "Name") != "");
+        }
+
+        static bool Draussen(DataGridViewRow r)
+        {
+            object v = r.Cells["Draussen"].Value;
+            return v is bool && (bool)v;
         }
 
         static string Wert(DataGridViewRow r, string spalte)

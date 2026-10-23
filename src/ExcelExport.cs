@@ -257,10 +257,11 @@ namespace ShiftDesk
             int spalte = ErsteStundenSpalte;
             for (int k = 0; k < cfg.Posten.Count; k++, spalte += 3)
             {
-                legende.Text(spalte, cfg.Posten[k].Name, sErsterPosten + k);
+                legende.Text(spalte, cfg.Posten[k].Name + (cfg.Posten[k].Draussen ? " ❄" : ""), sErsterPosten + k);
                 verbunden.Add(Spalte(spalte) + (nr - 1) + ":" + Spalte(spalte + 2) + (nr - 1));
             }
-            if (cfg.Essenszeiten.Count > 0) legende.Text(spalte, "🍴 = Essen", sNormal);
+            if (cfg.Essenszeiten.Count > 0) { legende.Text(spalte, "🍴 = Essen", sNormal); spalte += 3; }
+            if (cfg.Posten.Any(p => p.Draussen)) legende.Text(spalte, "❄ = Draussen", sNormal);
             zeilen.Add(legende);
             if (plan.NichtEingeteilt.Count > 0)
                 zeilen.Add(new Zeile(nr++, 20).Text(1, "Nicht eingeteilt", sKopf).Text(ErsteStundenSpalte,

@@ -168,11 +168,51 @@ namespace ShiftDesk
                 }
             }
 
+            DraussenPruefen();
+
             foreach (var e in unterbesetzt.OrderByDescending(e => e.Key))
             {
                 var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
                 plan.Warnungen.Insert(0, "Posten «" + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
                     " Stunde(n) nicht voll besetzt: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
+            }
+        }
+
+        bool Draussen(int r, int t)
+        {
+            int k = plan.Z[r, t];
+            return k >= 0 && cfg.Posten[k].Draussen;
+        }
+
+        // Wie viele Stunden ist Zeile r unmittelbar vor Stunde t schon am Stück draussen?
+        int DraussenSerie(int r, int t)
+        {
+            int n = 0;
+            while (t - 1 - n >= 0 && Draussen(r, t - 1 - n)) n++;
+            return n;
+        }
+
+        // Zur Gesunderhaltung: wer länger als erlaubt am Stück draussen war, wird gemeldet
+        void DraussenPruefen()
+        {
+            int max = cfg.DraussenMaxStunden;
+            if (max <= 0) return;
+            for (int r = 0; r < plan.Zeilen.Count; r++)
+            {
+                var faelle = new List<string>();
+                for (int t = 0; t < plan.Stunden; t++)
+                {
+                    if (!Draussen(r, t) || (t > 0 && Draussen(r, t - 1))) continue;
+                    int ende = t;
+                    while (ende + 1 < plan.Stunden && Draussen(r, ende + 1)) ende++;
+                    int dauer = ende - t + 1;
+                    if (dauer > max)
+                        faelle.Add(dauer + " Std. ab " + plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
+                    t = ende;
+                }
+                if (faelle.Count > 0)
+                    plan.Warnungen.Add(Name(r) + ": länger als " + max + " Std. am Stück draussen (" +
+                        string.Join(", ", faelle.Take(4)) + (faelle.Count > 4 ? ", …" : "") + ")");
             }
         }
 
@@ -211,26 +251,10 @@ namespace ShiftDesk
                         plaetze.Add(k);
             }
 
-            // Mitten in einer Ablösung: wer schon im Dienst war, bleibt auf seinem Posten (sofern er noch offen ist).
-            // Wer auf dem Auffangposten sitzt, wird neu verteilt und rückt nach, wenn ein Platz frei geworden ist.
-            if (fortsetzen)
-            {
-                var bleiben = new List<int>();
-                foreach (int r in zeilen)
-                {
-                    int k = plan.Z[r, t - 1];
-                    if (k < 0) continue;
-                    var p = cfg.Posten[k];
-                    if (p.Typ == PostenTyp.Auffang || !p.OffenUm(h) || !p.Erlaubt(plan.Zeilen[r].Funktion)) continue;
-                    int i = plaetze.IndexOf(k);
-                    if (i < 0) continue;
-                    plaetze.RemoveAt(i);
-                    plan.Z[r, t] = k;
-                    anzahl[r, k]++;
-                    bleiben.Add(r);
-                }
-                zeilen = zeilen.Except(bleiben).ToList();
-            }
+            // Mitten in einer Ablösung (fortsetzen) bleibt jeder auf seinem Posten: das Bleiben ist in den Kosten
+            // so stark belohnt, dass nur zwei Dinge einen Wechsel auslösen: wer auf dem Auffangposten sitzt, rückt
+            // auf einen frei gewordenen Platz nach, und wer draussen die erlaubte Zeit erreicht hat, tauscht mit
+            // jemandem von drinnen (Gesunderhaltung geht vor).
             int n = zeilen.Count, m = plaetze.Count, N = n + m;
             if (N == 0) return;
 
@@ -249,9 +273,9 @@ namespace ShiftDesk
                 {
                     if (i < n && j < m)
                         kosten[i, j] = cfg.Posten[plaetze[j]].Erlaubt(plan.Zeilen[zeilen[i]].Funktion)
-                            ? Kosten(zeilen[i], plaetze[j], t, schnitt) : SPERRE;
+                            ? Kosten(zeilen[i], plaetze[j], t, schnitt, fortsetzen) : SPERRE;
                     else if (i < n)
-                        kosten[i, j] = Kosten(zeilen[i], rest[i], t, schnitt);
+                        kosten[i, j] = Kosten(zeilen[i], rest[i], t, schnitt, fortsetzen);
                     else if (j < m)
                         kosten[i, j] = LEER + (m - j) * 100;  // wichtigere Posten (weiter oben) immer zuerst besetzen
                     else
@@ -278,7 +302,10 @@ namespace ShiftDesk
             }
         }
 
-        double Kosten(int r, int k, int t, double[] schnitt)
+        const double BLEIBEN = 30;    // Belohnung, mitten im Block auf dem Posten zu bleiben
+        const double DRAUSSEN = 80;   // Strafe, über die erlaubte Zeit hinaus draussen zu bleiben (> 2 × BLEIBEN, damit ein Tausch lohnt)
+
+        double Kosten(int r, int k, int t, double[] schnitt, bool fortsetzen)
         {
             double c = rnd.NextDouble() * 0.3;
             if (k < 0) return c;
@@ -287,7 +314,13 @@ namespace ShiftDesk
             int vorvorher = t > takt ? plan.Z[r, t - 1 - takt] : Plan.RUHE;   // Posten vor der letzten Ablösung
             var posten = cfg.Posten[k];
 
-            if (posten.AmStueck)
+            if (fortsetzen)
+            {
+                // mitten im Block: bleiben, Gerechtigkeit zählt hier kaum
+                if (vorher == k && posten.Typ != PostenTyp.Auffang) c -= BLEIBEN;
+                c += 0.5 * (anzahl[r, k] - schnitt[k]);
+            }
+            else if (posten.AmStueck)
             {
                 // z. B. Wacht Kdt: möglichst am Stück
                 if (vorher == k) c -= 5;
@@ -299,6 +332,17 @@ namespace ShiftDesk
                 if (vorher == k) c += 10;
                 if (vorvorher == k) c += 3;
                 c += 4 * (anzahl[r, k] - schnitt[k]);
+            }
+
+            // Gesunderhaltung: nicht zu lange am Stück draussen. Kein hartes Verbot, damit der Posten
+            // notfalls trotzdem besetzt wird; dann gibt es eine Warnung.
+            if (posten.Draussen && cfg.DraussenMaxStunden > 0)
+            {
+                int serie = DraussenSerie(r, t);
+                if (serie >= cfg.DraussenMaxStunden)
+                    c += DRAUSSEN + 20 * (serie - cfg.DraussenMaxStunden);
+                else if (serie > 0)
+                    c += 1.5 * serie / cfg.DraussenMaxStunden;   // leicht lieber jemanden nehmen, der noch drin war
             }
 
             if (essenAktiv && posten.EssenMoeglich && kannEssen[r] && BrauchtEssen(r, t))

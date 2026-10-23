@@ -15,6 +15,7 @@ namespace ShiftDesk
         public SpaltenArt Art;
         public Func<IEnumerable<string>> Optionen;
         public Func<string, string> Anzeige;   // Text für einen Wert (z. B. "" -> "Keine")
+        public Func<DataGridViewRow, string> Symbol;   // Icon rechts im Feld, abhängig von der Zeile (null = keins)
         public ZeilenKnopf[] Knoepfe;          // nur bei Aktionen
 
         public SpaltenInfo(SpaltenArt art, Func<IEnumerable<string>> optionen = null, Func<string, string> anzeige = null)
@@ -250,6 +251,12 @@ namespace ShiftDesk
             }
             else
             {
+                string symbol = info.Symbol != null ? info.Symbol(g.Rows[e.RowIndex]) : null;
+                if (symbol != null)
+                {
+                    Lucide.Zeichne(gr, symbol, new RectangleF(textRechts - icon, feld.Y + (feld.Height - icon) / 2f, icon, icon), Theme.Akzent);
+                    textRechts -= icon + Theme.S(6);
+                }
                 string wert = WertText(zelle);
                 string text = info.Anzeige != null ? info.Anzeige(wert) : wert;
                 bool platzhalter = info.Anzeige != null && text != wert;
@@ -294,7 +301,7 @@ namespace ShiftDesk
             {
                 case SpaltenArt.Schalter:
                     zelle.Value = !(zelle.Value is bool && (bool)zelle.Value);
-                    g.InvalidateCell(zelle);
+                    g.InvalidateRow(zeile);   // andere Zellen der Zeile können davon abhängen (Symbol)
                     Melden();
                     break;
 

@@ -47,6 +47,7 @@ namespace ShiftDesk
         public PostenTyp Typ = PostenTyp.Normal;
         public bool EssenMoeglich;
         public bool AmStueck;                               // gleiche Person bleibt möglichst auf dem Posten
+        public bool Draussen;                               // im Freien: niemand soll zu lange am Stück draussen sein
         public List<string> Funktionen = new List<string>(); // leer = alle Funktionen
 
         public bool OffenUm(int stunde)
@@ -88,6 +89,7 @@ namespace ShiftDesk
         public DateTime Start;
         public DateTime Ende;
         public int AbloesungStunden = 1;   // Posten wechseln alle X Stunden (ab Mitternacht gerechnet)
+        public int DraussenMaxStunden = 2; // höchstens so viele Stunden am Stück auf Posten im Freien (0 = keine Grenze)
         public List<Funktion> Funktionen = new List<Funktion>();
         public List<string> Grade = new List<string>();
         public List<Person> Personen = new List<Person>();
@@ -186,9 +188,9 @@ namespace ShiftDesk
             var wache = new List<string> { "Wache" };
             k.Posten.Add(new Posten { Name = "Wacht Kdt", Farbe = Color.FromArgb(79, 173, 234).ToArgb(), Anzahl = 1, AmStueck = true, Funktionen = new List<string> { "Wacht Kdt", "Wacht Kdt Stv" } });
             k.Posten.Add(new Posten { Name = "Kdo", Farbe = Color.FromArgb(46, 112, 190).ToArgb(), Anzahl = 1, Funktionen = wache.ToList() });
-            k.Posten.Add(new Posten { Name = "Haupteingang", Farbe = Color.FromArgb(178, 34, 34).ToArgb(), Anzahl = 2, OffenVon = 7, OffenBis = 22, Funktionen = wache.ToList() });
+            k.Posten.Add(new Posten { Name = "Haupteingang", Farbe = Color.FromArgb(178, 34, 34).ToArgb(), Anzahl = 2, OffenVon = 7, OffenBis = 22, Draussen = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Amiti", Farbe = Color.FromArgb(76, 168, 80).ToArgb(), Anzahl = 2, OffenVon = 7, OffenBis = 23, Funktionen = wache.ToList() });
-            k.Posten.Add(new Posten { Name = "Patrouille", Farbe = Color.FromArgb(112, 48, 160).ToArgb(), Anzahl = 2, Funktionen = wache.ToList() });
+            k.Posten.Add(new Posten { Name = "Patrouille", Farbe = Color.FromArgb(112, 48, 160).ToArgb(), Anzahl = 2, Draussen = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Reserve", Farbe = Color.FromArgb(247, 193, 67).ToArgb(), Anzahl = 2, EssenMoeglich = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Pikett", Farbe = Color.FromArgb(166, 166, 166).ToArgb(), Anzahl = 0, Typ = PostenTyp.Auffang, EssenMoeglich = true, Funktionen = wache.ToList() });
 

@@ -20,6 +20,7 @@ namespace ShiftDesk
         static readonly Color HellGrau = Color.FromArgb(156, 163, 175);
         static readonly Color Linie = Color.FromArgb(229, 231, 235);
         static readonly Color Leer = Color.FromArgb(243, 244, 246);
+        static readonly Color Schnee = Color.FromArgb(37, 99, 235);
 
         public static void Seite(Graphics g, RectangleF b, Plan plan, int seite)
         {
@@ -148,6 +149,11 @@ namespace ShiftDesk
                     var posten = cfg.Posten[k];
                     var farbe = Color.FromArgb(posten.Farbe);
                     g.DrawString(posten.Name, fKlein, tGrau, new RectangleF(b.Left + gradW, by, nameW, balkenH), links);
+                    if (posten.Draussen)
+                    {
+                        float nw = Math.Min(nameW - 12 * u, g.MeasureString(posten.Name, fKlein).Width);
+                        SchneeSymbol(g, new RectangleF(b.Left + gradW + nw + 2 * u, by + (balkenH - 9 * u) / 2, 9 * u, 9 * u));
+                    }
                     int c0 = 0;
                     while (c0 < stunden)
                     {
@@ -169,11 +175,14 @@ namespace ShiftDesk
                 g.DrawString("Legende", fKleinFett, tGrau, new RectangleF(b.Left + gradW, ly, nameW, legendeH), links);
                 float lx = xs;
                 float q = 10 * u;
-                for (int k = 0; k <= cfg.Posten.Count; k++)
+                // Posten (mit Schneeflocke, wenn im Freien), dann die Erklärungen für Essen und Draussen
+                bool irgendwoDraussen = cfg.Posten.Any(p => p.Draussen);
+                for (int k = 0; k <= cfg.Posten.Count + 1; k++)
                 {
-                    bool essen = k == cfg.Posten.Count;
-                    if (essen && cfg.Essenszeiten.Count == 0) break;
-                    string name = essen ? "Essen" : cfg.Posten[k].Name;
+                    bool essen = k == cfg.Posten.Count, draussen = k == cfg.Posten.Count + 1;
+                    if (essen && cfg.Essenszeiten.Count == 0) continue;
+                    if (draussen && !irgendwoDraussen) break;
+                    string name = essen ? "Essen" : draussen ? "Draussen" : cfg.Posten[k].Name;
                     var feld = new RectangleF(lx, ly + (legendeH - q) / 2, q, q);
                     if (essen)
                     {
@@ -181,10 +190,17 @@ namespace ShiftDesk
                         g.FillEllipse(new SolidBrush(Leer), gross);
                         EssenSymbol(g, gross);
                     }
+                    else if (draussen) SchneeSymbol(g, feld);
                     else Formen.Fuellen(g, feld, 2 * u, Color.FromArgb(cfg.Posten[k].Farbe));
                     float w = g.MeasureString(name, fKlein).Width;
                     g.DrawString(name, fKlein, tText, new RectangleF(lx + q + 4 * u, ly, w + 2 * u, legendeH), links);
-                    lx += q + 4 * u + w + 16 * u;
+                    lx += q + 4 * u + w;
+                    if (!essen && !draussen && cfg.Posten[k].Draussen)
+                    {
+                        SchneeSymbol(g, new RectangleF(lx + 2 * u, ly + (legendeH - q) / 2, q, q));
+                        lx += q + 2 * u;
+                    }
+                    lx += 16 * u;
                 }
 
                 // Nicht eingeteilte Personen (z. B. Reserve), nach Funktion
@@ -220,6 +236,12 @@ namespace ShiftDesk
         {
             int hell = (hintergrund.R * 299 + hintergrund.G * 587 + hintergrund.B * 114) / 1000;
             return hell < 150 ? Color.White : TextFarbe;
+        }
+
+        // Schneeflocke: Posten im Freien
+        static void SchneeSymbol(Graphics g, RectangleF feld)
+        {
+            Lucide.Zeichne(g, "snowflake", feld, Schnee, 2.4f);
         }
 
         // Lucide-Besteck auf weissem Kreis
