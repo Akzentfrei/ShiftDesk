@@ -348,13 +348,11 @@ namespace ShiftDesk
             gridPersonen.Columns.Add(Spalte("Name", "Name", 130, new SpaltenInfo(SpaltenArt.Text)));
             gridPersonen.Columns.Add(Spalte("Funktion", "Funktion", 85, new SpaltenInfo(SpaltenArt.Auswahl, () => Namen(gridFunktionen), Waehlen)));
             gridPersonen.Columns.Add(Spalte("Gruppe", "Gruppe (Ruhezeit)", 85, new SpaltenInfo(SpaltenArt.Auswahl, () => new[] { "" }.Concat(Namen(gridGruppen)), Keine)));
+            Zeilenknoepfe(gridPersonen, true);
             Bearbeitbar(gridPersonen);
             return NeueSeite("Personen",
                 "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. Zum Ändern einfach ins Feld klicken.",
                 KarteMit(gridPersonen),
-                Knopf("", "chevron-up", () => Verschieben(gridPersonen, -1)),
-                Knopf("", "chevron-down", () => Verschieben(gridPersonen, 1)),
-                Knopf("Entfernen", "trash-2", () => Entfernen(gridPersonen)),
                 Knopf("Person hinzufügen", "plus", NeuePerson, true));
         }
 
@@ -364,11 +362,11 @@ namespace ShiftDesk
             gridGruppen.Columns.Add(Spalte("Name", "Gruppe", 140, new SpaltenInfo(SpaltenArt.Text)));
             gridGruppen.Columns.Add(Spalte("Von", "Ruhe von", 80, StundenInfo()));
             gridGruppen.Columns.Add(Spalte("Bis", "Ruhe bis", 80, StundenInfo()));
+            Zeilenknoepfe(gridGruppen, false);
             Bearbeitbar(gridGruppen).Umbenannt += (z, alt, neu) => { if (z.OwningColumn.Name == "Name") Ersetzen(gridPersonen, "Gruppe", alt, neu); };
             return NeueSeite("Gruppen & Ruhezeiten",
                 "Jede Gruppe ruht jeden Tag im gleichen Zeitfenster, auch über Mitternacht (z. B. 23:00 bis 07:00). Gleiche Zeit bei «von» und «bis» bedeutet keine Ruhezeit. Auch die Wachtkommandanten brauchen je eine Gruppe.",
                 KarteMit(gridGruppen),
-                Knopf("Entfernen", "trash-2", () => Entfernen(gridGruppen)),
                 Knopf("Gruppe hinzufügen", "plus", () => Hinzufuegen(gridGruppen, "", Zeit.Text(23), Zeit.Text(7)), true));
         }
 
@@ -384,13 +382,11 @@ namespace ShiftDesk
             gridPosten.Columns.Add(Spalte("Typ", "Typ", 62, new SpaltenInfo(SpaltenArt.Auswahl, () => TypListe)));
             gridPosten.Columns.Add(Spalte("AmStueck", "Am Stück", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             gridPosten.Columns.Add(Spalte("Essen", "Essen", 42, new SpaltenInfo(SpaltenArt.Schalter)));
+            Zeilenknoepfe(gridPosten, true);
             Bearbeitbar(gridPosten);
             return NeueSeite("Posten",
                 "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. «Am Stück» = gleiche Person bleibt möglichst lange.",
                 KarteMit(gridPosten),
-                Knopf("", "chevron-up", () => Verschieben(gridPosten, -1)),
-                Knopf("", "chevron-down", () => Verschieben(gridPosten, 1)),
-                Knopf("Entfernen", "trash-2", () => Entfernen(gridPosten)),
                 Knopf("Posten hinzufügen", "plus", () =>
                 {
                     int i = Hinzufuegen(gridPosten, "", "", "1", "", Zeit.Text(0), Zeit.Text(0), "Normal", false, false);
@@ -405,11 +401,11 @@ namespace ShiftDesk
             gridEssen.Columns.Add(Spalte("Name", "Mahlzeit", 140, new SpaltenInfo(SpaltenArt.Text)));
             gridEssen.Columns.Add(Spalte("Von", "von", 80, StundenInfo()));
             gridEssen.Columns.Add(Spalte("Bis", "bis", 80, StundenInfo()));
+            Zeilenknoepfe(gridEssen, false);
             Bearbeitbar(gridEssen);
             return NeueSeite("Essenszeiten",
                 "In jedem Zeitfenster bekommt jede Person im Dienst eine Stunde zum Essen, auf einem Posten mit «Essen möglich». Im Plan ist diese Stunde mit dem Besteck markiert.",
                 KarteMit(gridEssen),
-                Knopf("Entfernen", "trash-2", () => Entfernen(gridEssen)),
                 Knopf("Mahlzeit hinzufügen", "plus", () => Hinzufuegen(gridEssen, "", Zeit.Text(11), Zeit.Text(13)), true));
         }
 
@@ -626,9 +622,11 @@ namespace ShiftDesk
         static void SpaltenVerteilen(DataGridView g)
         {
             if (g.Columns.Count == 0 || g.ClientSize.Width <= 0) return;
-            int verfuegbar = g.ClientSize.Width - 1;
-            float summe = g.Columns.Cast<DataGridViewColumn>().Sum(c => c.FillWeight);
-            foreach (DataGridViewColumn c in g.Columns)
+            // Spalten mit fester Breite (Zeilenknöpfe) behalten ihre Breite, der Rest wird verteilt
+            var spalten = g.Columns.Cast<DataGridViewColumn>().Where(c => !FesteBreite(c)).ToList();
+            int verfuegbar = g.ClientSize.Width - 1 - g.Columns.Cast<DataGridViewColumn>().Where(FesteBreite).Sum(c => c.Width);
+            float summe = spalten.Sum(c => c.FillWeight);
+            foreach (var c in spalten)
                 c.Width = Math.Max(c.MinimumWidth, (int)(verfuegbar * c.FillWeight / summe));
         }
 
@@ -739,6 +737,41 @@ namespace ShiftDesk
             return s == "" ? "Keine" : s;
         }
 
+        // Knöpfe am Ende jeder Zeile: Verschieben (wo die Reihenfolge zählt) und Entfernen.
+        // Tastatur: Entf entfernt die markierten Zeilen, Alt+Pfeil verschiebt die aktuelle Zeile.
+        void Zeilenknoepfe(DataGridView g, bool verschiebbar)
+        {
+            var knoepfe = new List<ZeilenKnopf>();
+            if (verschiebbar)
+            {
+                knoepfe.Add(new ZeilenKnopf("chevron-up", i => Verschieben(g, i, -1), i => i > 0));
+                knoepfe.Add(new ZeilenKnopf("chevron-down", i => Verschieben(g, i, 1), i => i < g.RowCount - 1));
+            }
+            knoepfe.Add(new ZeilenKnopf("trash-2", i => Entfernen(g, i)) { Gefahr = true });
+            var spalte = Spalte("Aktionen", "", 1, new SpaltenInfo(knoepfe.ToArray()));
+            spalte.MinimumWidth = spalte.Width = TabellenEditor.AktionenBreite(knoepfe.Count);
+            g.Columns.Add(spalte);
+            g.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Delete)
+                {
+                    Entfernen(g);
+                    e.Handled = true;
+                }
+                else if (verschiebbar && e.Alt && (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down) && g.CurrentCell != null)
+                {
+                    Verschieben(g, g.CurrentCell.RowIndex, e.KeyCode == Keys.Up ? -1 : 1);
+                    e.Handled = true;
+                }
+            };
+        }
+
+        static bool FesteBreite(DataGridViewColumn c)
+        {
+            var info = c.Tag as SpaltenInfo;
+            return info != null && info.Art == SpaltenArt.Aktionen;
+        }
+
         TabellenEditor Bearbeitbar(DataGridView g)
         {
             var ed = new TabellenEditor(g);
@@ -768,6 +801,7 @@ namespace ShiftDesk
             gridFunktionen = NeuesGrid();
             gridFunktionen.Columns.Add(Spalte("Name", "Funktion", 150, new SpaltenInfo(SpaltenArt.Text)));
             gridFunktionen.Columns.Add(Spalte("ImPlan", "Im Plan einteilen", 80, new SpaltenInfo(SpaltenArt.Schalter)));
+            Zeilenknoepfe(gridFunktionen, true);
             Bearbeitbar(gridFunktionen).Umbenannt += (z, alt, neu) =>
             {
                 Ersetzen(gridPersonen, "Funktion", alt, neu);
@@ -780,6 +814,7 @@ namespace ShiftDesk
             };
             gridGrade = NeuesGrid();
             gridGrade.Columns.Add(Spalte("Name", "Grad", 100, new SpaltenInfo(SpaltenArt.Text)));
+            Zeilenknoepfe(gridGrade, true);
             Bearbeitbar(gridGrade).Umbenannt += (z, alt, neu) => Ersetzen(gridPersonen, "Grad", alt, neu);
 
             var raster = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = Padding.Empty };
@@ -787,15 +822,9 @@ namespace ShiftDesk
             raster.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
             raster.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var links = Bereich("Funktionen", gridFunktionen,
-                Knopf("", "chevron-up", () => Verschieben(gridFunktionen, -1)),
-                Knopf("", "chevron-down", () => Verschieben(gridFunktionen, 1)),
-                Knopf("", "trash-2", () => Entfernen(gridFunktionen)),
                 Knopf("Funktion", "plus", () => Hinzufuegen(gridFunktionen, "", true), true));
             links.Margin = new Padding(0, 0, Theme.S(12), 0);
             var rechts = Bereich("Grade", gridGrade,
-                Knopf("", "chevron-up", () => Verschieben(gridGrade, -1)),
-                Knopf("", "chevron-down", () => Verschieben(gridGrade, 1)),
-                Knopf("", "trash-2", () => Entfernen(gridGrade)),
                 Knopf("Grad", "plus", () => Hinzufuegen(gridGrade, ""), true));
             rechts.Margin = new Padding(Theme.S(12), 0, 0, 0);
             raster.Controls.Add(links, 0, 0);
@@ -853,6 +882,12 @@ namespace ShiftDesk
             if (zeilen.Count == 0 && g.CurrentCell != null) zeilen.Add(g.CurrentCell.RowIndex);
             if (zeilen.Count > 1 && !Frage(zeilen.Count + " Zeilen entfernen?")) return;
             foreach (int i in zeilen) g.Rows.RemoveAt(i);
+        }
+
+        void Entfernen(DataGridView g, int zeile)
+        {
+            foreach (var ed in editoren) ed.Schliessen(true);
+            if (zeile >= 0 && zeile < g.Rows.Count) g.Rows.RemoveAt(zeile);
         }
 
         // ---------------------------------------------------------------- Daten <-> Oberfläche
@@ -984,12 +1019,11 @@ namespace ShiftDesk
             return s.Length >= 2 && int.TryParse(s.Substring(0, 2), out h) && h >= 0 && h < 24 ? h : 0;
         }
 
-        void Verschieben(DataGridView grid, int richtung)
+        void Verschieben(DataGridView grid, int i, int richtung)
         {
-            if (grid.CurrentCell == null) return;
-            int i = grid.CurrentCell.RowIndex, j = i + richtung;
-            int spalte = grid.CurrentCell.ColumnIndex;
-            if (j < 0 || j >= grid.Rows.Count) return;
+            int j = i + richtung;
+            if (i < 0 || j < 0 || j >= grid.Rows.Count) return;
+            int spalte = grid.CurrentCell != null ? grid.CurrentCell.ColumnIndex : 0;
             foreach (var ed in editoren) ed.Schliessen(true);
             benutzteTabellen.Add(grid);
             if (grid == gridPosten)

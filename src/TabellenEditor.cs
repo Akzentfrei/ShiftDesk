@@ -7,7 +7,7 @@ using System.Windows.Forms;
 
 namespace ShiftDesk
 {
-    public enum SpaltenArt { Text, Zahl, Auswahl, Mehrfach, Farbe, Schalter }
+    public enum SpaltenArt { Text, Zahl, Auswahl, Mehrfach, Farbe, Schalter, Aktionen }
 
     // Hängt an einer Tabellenspalte (Column.Tag) und sagt, wie sie bearbeitet wird
     public class SpaltenInfo
@@ -15,12 +15,39 @@ namespace ShiftDesk
         public SpaltenArt Art;
         public Func<IEnumerable<string>> Optionen;
         public Func<string, string> Anzeige;   // Text für einen Wert (z. B. "" -> "Keine")
+        public ZeilenKnopf[] Knoepfe;          // nur bei Aktionen
 
         public SpaltenInfo(SpaltenArt art, Func<IEnumerable<string>> optionen = null, Func<string, string> anzeige = null)
         {
             Art = art;
             Optionen = optionen;
             Anzeige = anzeige;
+        }
+
+        public SpaltenInfo(params ZeilenKnopf[] knoepfe) : this(SpaltenArt.Aktionen)
+        {
+            Knoepfe = knoepfe;
+        }
+    }
+
+    // Symbolknopf am Ende jeder Zeile (z. B. Verschieben, Entfernen)
+    public class ZeilenKnopf
+    {
+        public string Icon;
+        public Action<int> Ausfuehren;      // bekommt den Zeilenindex
+        public Func<int, bool> Bedingung;   // null = immer möglich
+        public bool Gefahr;                 // rot beim Darüberfahren
+
+        public ZeilenKnopf(string icon, Action<int> ausfuehren, Func<int, bool> bedingung = null)
+        {
+            Icon = icon;
+            Ausfuehren = ausfuehren;
+            Bedingung = bedingung;
+        }
+
+        public bool Moeglich(int zeile)
+        {
+            return Bedingung == null || Bedingung(zeile);
         }
     }
 
@@ -52,8 +79,23 @@ namespace ShiftDesk
             g.CellPainting += Malen;
             g.SelectionChanged += (s, e) => g.Invalidate();
             g.CellMouseEnter += (s, e) => Hover(e.RowIndex >= 0 && e.ColumnIndex >= 0 ? g[e.ColumnIndex, e.RowIndex] : null);
-            g.MouseLeave += (s, e) => Hover(null);
+            g.CellMouseMove += (s, e) =>
+            {
+                if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+                Hover(g[e.ColumnIndex, e.RowIndex]);
+                int k = KnopfBei(e);
+                if (k != hoverKnopf)
+                {
+                    hoverKnopf = k;
+                    g.InvalidateCell(e.ColumnIndex, e.RowIndex);
+                }
+                g.Cursor = k >= 0 ? Cursors.Hand : Cursors.Default;
+            };
+            g.MouseLeave += (s, e) => { Hover(null); g.Cursor = Cursors.Default; };
             g.CellMouseClick += Klick;
+            // erste/letzte Zeile ändern sich: Pfeile neu zeichnen
+            g.RowsAdded += (s, e) => g.Invalidate();
+            g.RowsRemoved += (s, e) => g.Invalidate();
             g.KeyDown += (s, e) =>
             {
                 if (g.CurrentCell == null || editor != null) return;
@@ -73,7 +115,7 @@ namespace ShiftDesk
             return c.Tag as SpaltenInfo;
         }
 
-        int hoverZeile = -1;
+        int hoverZeile = -1, hoverKnopf = -1;
 
         // Beim Darüberfahren immer ganze Zeilen neu zeichnen, damit der Zeilenhintergrund einheitlich bleibt
         void Hover(DataGridViewCell z)
@@ -82,6 +124,7 @@ namespace ShiftDesk
             var alt = hoverZelle;
             int alteZeile = hoverZeile;
             hoverZelle = z;
+            hoverKnopf = -1;
             hoverZeile = z != null ? z.RowIndex : -1;
             if (alteZeile != hoverZeile)
             {
@@ -99,6 +142,32 @@ namespace ShiftDesk
         Rectangle Feld(Rectangle zelle)
         {
             return Rectangle.FromLTRB(zelle.Left + Theme.S(6), zelle.Top + Theme.S(8), zelle.Right - Theme.S(6), zelle.Bottom - Theme.S(8));
+        }
+
+        // Zeilenknöpfe: rechtsbündig nebeneinander
+        const int KnopfGroesse = 32, KnopfAbstand = 2, KnopfRand = 10;
+
+        public static int AktionenBreite(int anzahl)
+        {
+            return Theme.S(2 * KnopfRand + anzahl * KnopfGroesse + (anzahl - 1) * KnopfAbstand);
+        }
+
+        static RectangleF KnopfFeld(Rectangle zelle, int anzahl, int k)
+        {
+            float d = Theme.S(KnopfGroesse), abstand = Theme.S(KnopfAbstand);
+            float x = zelle.Right - Theme.S(KnopfRand) - anzahl * d - (anzahl - 1) * abstand + k * (d + abstand);
+            return new RectangleF(x, zelle.Y + (zelle.Height - d) / 2f, d, d);
+        }
+
+        // Index des (ausführbaren) Knopfs unter der Maus, sonst -1
+        int KnopfBei(DataGridViewCellMouseEventArgs e)
+        {
+            var info = Info(g.Columns[e.ColumnIndex]);
+            if (info == null || info.Art != SpaltenArt.Aktionen || e.RowIndex < 0 || e.RowIndex >= g.RowCount) return -1;
+            var zelle = new Rectangle(0, 0, g.Columns[e.ColumnIndex].Width, g.Rows[e.RowIndex].Height);
+            for (int k = 0; k < info.Knoepfe.Length; k++)
+                if (KnopfFeld(zelle, info.Knoepfe.Length, k).Contains(e.Location) && info.Knoepfe[k].Moeglich(e.RowIndex)) return k;
+            return -1;
         }
 
         public static string WertText(DataGridViewCell z)
@@ -129,6 +198,23 @@ namespace ShiftDesk
             var gr = e.Graphics;
             TabellenStil.Hintergrund(gr, g, e.RowIndex, e.CellBounds, hoverZeile);
             gr.SmoothingMode = SmoothingMode.AntiAlias;
+
+            if (info.Art == SpaltenArt.Aktionen)
+            {
+                int symbol = Theme.S(16);
+                for (int k = 0; k < info.Knoepfe.Length; k++)
+                {
+                    var knopf = info.Knoepfe[k];
+                    var kf = KnopfFeld(e.CellBounds, info.Knoepfe.Length, k);
+                    bool moeglich = knopf.Moeglich(e.RowIndex), darueber = moeglich && zelle == hoverZelle && k == hoverKnopf;
+                    if (darueber)
+                        Formen.Fuellen(gr, kf, Theme.S(7), knopf.Gefahr ? Color.FromArgb(Theme.Dunkel ? 48 : 26, Theme.Gefahr) : Theme.Rand);
+                    var farbe = !moeglich ? Color.FromArgb(70, Theme.Gedaempft) : darueber ? (knopf.Gefahr ? Theme.Gefahr : Theme.Text) : Theme.Gedaempft;
+                    Lucide.Zeichne(gr, knopf.Icon, new RectangleF(kf.X + (kf.Width - symbol) / 2f, kf.Y + (kf.Height - symbol) / 2f, symbol, symbol), farbe);
+                }
+                e.Handled = true;
+                return;
+            }
 
             if (info.Art == SpaltenArt.Schalter)
             {
@@ -178,6 +264,14 @@ namespace ShiftDesk
         void Klick(object sender, DataGridViewCellMouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left || e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            var info = Info(g.Columns[e.ColumnIndex]);
+            if (info != null && info.Art == SpaltenArt.Aktionen)
+            {
+                // erst nach dem Klick ausführen: Zeilen entfernen/umstellen mitten im Mausereignis mag die Tabelle nicht
+                int k = KnopfBei(e), zeile = e.RowIndex;
+                if (k >= 0) g.BeginInvoke(new Action(() => { info.Knoepfe[k].Ausfuehren(zeile); Hover(null); }));
+                return;
+            }
             if ((Control.ModifierKeys & (Keys.Control | Keys.Shift)) != 0) return;   // Mehrfachauswahl von Zeilen
             Oeffnen(e.ColumnIndex, e.RowIndex);
         }
