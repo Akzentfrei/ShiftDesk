@@ -152,11 +152,12 @@ namespace ShiftDesk
             return stuendlich ? 1 : Math.Max(1, AbloesungStunden);
         }
 
-        // Darf diese Person diesen Posten besetzen? Funktion muss erlaubt sein; Fahrer nur auf Fahrerposten,
-        // alle anderen nie auf Fahrerposten.
+        // Darf diese Person diesen Posten besetzen? Funktion muss erlaubt sein; Fahrer nur auf Fahrerposten.
+        // Auf dem Fahrerposten dürfen auch Nicht-Fahrer sein, aber nur neben einem Fahrer: der erste Platz
+        // ist für einen Fahrer reserviert, das regelt der Planer.
         public static bool Darf(Person p, Posten k)
         {
-            return k.Erlaubt(p.Funktion) && (p.Fahrer ? k.Typ == PostenTyp.Fahrer : k.Typ != PostenTyp.Fahrer);
+            return k.Erlaubt(p.Funktion) && (!p.Fahrer || k.Typ == PostenTyp.Fahrer);
         }
 
         public bool ImPlan(Person p)

@@ -395,7 +395,7 @@ namespace ShiftDesk
             Zeilenknoepfe(gridPosten, true);
             Bearbeitbar(gridPosten);
             return NeueSeite("Posten",
-                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer; «Pflicht» = muss immer voll besetzt sein und wird vor allen anderen besetzt. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto) ist nur für Fahrer, und Fahrer sind nur dort oder in Ruhe; die Anzahl ist das Soll, gemeldet wird erst, wenn gar kein Fahrer da ist. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
+                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer; «Pflicht» = muss immer voll besetzt sein und wird vor allen anderen besetzt. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto): der erste Platz ist für einen Fahrer, die weiteren Plätze bekommen Fahrer, wenn welche da sind, sonst andere Leute; Fahrer selbst sind nur dort oder in Ruhe. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
                 KarteMit(gridPosten),
                 Knopf("Posten hinzufügen", "plus", () =>
                 {

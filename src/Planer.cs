@@ -151,6 +151,7 @@ namespace ShiftDesk
             }
 
             var unterbesetzt = new Dictionary<int, List<int>>();   // Posten -> Stunden
+            var ohneFahrer = new Dictionary<int, List<int>>();     // Fahrerposten -> Stunden ohne Fahrer
             var essenGesehen = new Dictionary<long, HashSet<int>>();
             var essenName = new Dictionary<long, string>();
 
@@ -166,7 +167,7 @@ namespace ShiftDesk
 
                 var zeilen = Enumerable.Range(0, n).Where(r => plan.Z[r, t] == Plan.FREI).ToList();
                 int takt = cfg.TaktUm(h);
-                Zuteilen(t, h, zeilen, unterbesetzt, takt > 1 && t > 0 && h % takt != 0);
+                Zuteilen(t, h, zeilen, unterbesetzt, ohneFahrer, takt > 1 && t > 0 && h % takt != 0);
 
                 if (essenAktiv)
                 {
@@ -202,8 +203,13 @@ namespace ShiftDesk
             {
                 var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
                 plan.Warnungen.Insert(0, (cfg.Posten[e.Key].Pflicht ? "Pflichtposten «" : "Posten «") + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
-                    (cfg.Posten[e.Key].Typ == PostenTyp.Fahrer ? " Stunde(n) ohne Fahrer: " : " Stunde(n) nicht voll besetzt: ") +
-                    string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
+                    " Stunde(n) nicht voll besetzt: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
+            }
+            foreach (var e in ohneFahrer.OrderByDescending(e => e.Key))
+            {
+                var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
+                plan.Warnungen.Insert(0, "Posten «" + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
+                    " Stunde(n) ohne Fahrer: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
             }
         }
 
@@ -271,7 +277,7 @@ namespace ShiftDesk
         // Zusätzliche Leer-Zeilen erlauben es, Plätze unbesetzt zu lassen, wenn Leute fehlen.
         // Zugeteilt werden Einheiten: ein Zweierteam, dessen beide Mitglieder verfügbar sind, zählt als eine Einheit
         // der Grösse 2 und braucht auf dem Posten einen Doppelplatz; alle anderen sind Einheiten der Grösse 1.
-        void Zuteilen(int t, int h, List<int> zeilen, Dictionary<int, List<int>> unterbesetzt, bool fortsetzen)
+        void Zuteilen(int t, int h, List<int> zeilen, Dictionary<int, List<int>> unterbesetzt, Dictionary<int, List<int>> ohneFahrer, bool fortsetzen)
         {
             var einheiten = new List<int[]>();
             var offen = new HashSet<int>(zeilen);
@@ -290,11 +296,13 @@ namespace ShiftDesk
             // Doppelplätze nur so viele, wie Teams da sind, die den Posten besetzen dürfen (und insgesamt nicht mehr
             // als Teams); der Rest sind Einzelplätze (z. B. Fahrerposten, wenn die Fahrer einzeln sind).
             // leer[j]: Kosten, wenn der Platz unbesetzt bleibt. Pflichtposten werden vor allen anderen besetzt,
-            // sonst gilt die Reihenfolge (weiter oben = wichtiger). Beim Fahrerposten ist der erste Platz am
-            // wichtigsten (mindestens ein Fahrer), die weiteren Plätze dürfen leer bleiben, wenn Fahrer fehlen.
+            // sonst gilt die Reihenfolge (weiter oben = wichtiger).
+            // nurFahrer[j]: der erste Platz eines Fahrerpostens ist für einen Fahrer reserviert (er ist auch der
+            // wichtigste); die weiteren Plätze bekommen Fahrer, wenn welche da sind, sonst andere Leute.
             var plaetze = new List<int>();
             var groesse = new List<int>();
             var leer = new List<double>();
+            var nurFahrer = new List<bool>();
             int paareUebrig = einheiten.Count(e => e.Length == 2);
             // Pflichtposten zuerst (sie bekommen auch die Teams zuerst), dann die Reihenfolge der Tabelle
             var reihenfolge = Enumerable.Range(0, cfg.Posten.Count).OrderBy(k => cfg.Posten[k].Pflicht ? 0 : 1).ThenBy(k => k).ToList();
@@ -302,13 +310,17 @@ namespace ShiftDesk
             {
                 var p = cfg.Posten[k];
                 if (p.Typ == PostenTyp.Auffang || !p.OffenUm(h)) continue;
-                int doppel = Math.Min(Math.Min(p.Anzahl / 2, paareUebrig), einheiten.Count(e => e.Length == 2 && erlaubtFuer(e, p)));
+                // Doppelplätze auf dem Fahrerposten nur für reine Fahrerteams
+                int doppel = Math.Min(Math.Min(p.Anzahl / 2, paareUebrig), einheiten.Count(e => e.Length == 2 && erlaubtFuer(e, p)
+                    && (p.Typ != PostenTyp.Fahrer || e.All(r => plan.Zeilen[r].Fahrer))));
                 paareUebrig -= doppel;
-                for (int i = 0; i < doppel; i++) { plaetze.Add(k); groesse.Add(2); }
-                for (int i = 0; i < p.Anzahl - 2 * doppel; i++) { plaetze.Add(k); groesse.Add(1); }
                 double basis = p.Pflicht ? 4 * LEER : LEER;
-                for (int i = 0; i < p.Anzahl - doppel; i++)
-                    leer.Add(p.Typ == PostenTyp.Fahrer ? (i == 0 ? 2 * basis : LEER / 2) : basis);
+                for (int i = 0; i < doppel; i++) { plaetze.Add(k); groesse.Add(2); nurFahrer.Add(false); leer.Add(p.Typ == PostenTyp.Fahrer && i == 0 ? 2 * basis : basis); }
+                for (int i = 0; i < p.Anzahl - 2 * doppel; i++)
+                {
+                    bool erster = p.Typ == PostenTyp.Fahrer && doppel == 0 && i == 0;
+                    plaetze.Add(k); groesse.Add(1); nurFahrer.Add(erster); leer.Add(erster ? 2 * basis : basis);
+                }
             }
             for (int j = 0; j < leer.Count; j++) leer[j] += (leer.Count - j) * 100;
 
@@ -327,7 +339,9 @@ namespace ShiftDesk
                 schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
             }
             var rest = einheiten.Select(e => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && erlaubtFuer(e, p))).ToArray();
-            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen));
+            // Nicht-Fahrer auf dem Fahrerposten nur, wenn kein Fahrer frei ist (kleiner Aufschlag)
+            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen)
+                + (k >= 0 && cfg.Posten[k].Typ == PostenTyp.Fahrer && !plan.Zeilen[r].Fahrer ? NICHTFAHRER : 0));
 
             var kosten = new double[N, N];
             for (int i = 0; i < N; i++)
@@ -335,6 +349,7 @@ namespace ShiftDesk
                 {
                     if (i < n && j < m)
                         kosten[i, j] = groesse[j] == einheiten[i].Length && erlaubtFuer(einheiten[i], cfg.Posten[plaetze[j]])
+                            && (!nurFahrer[j] || einheiten[i].All(r => plan.Zeilen[r].Fahrer))
                             ? kostenEinheit(einheiten[i], plaetze[j]) : SPERRE;
                     else if (i < n)
                         kosten[i, j] = kostenEinheit(einheiten[i], rest[i]);
@@ -357,19 +372,20 @@ namespace ShiftDesk
                     if (k >= 0) anzahl[r, k]++;
                 }
             }
-            // Unbesetzte Plätze melden; ein Fahrerposten gilt erst als unterbesetzt, wenn gar niemand dort ist
+            // Unbesetzte Plätze melden; der Fahrerplatz eines Fahrerpostens separat («ohne Fahrer»)
             for (int j = 0; j < m; j++)
             {
                 if (besetzt[j]) continue;
                 int k = plaetze[j];
-                if (cfg.Posten[k].Typ == PostenTyp.Fahrer && Enumerable.Range(0, m).Any(x => plaetze[x] == k && besetzt[x])) continue;
+                var ziel = nurFahrer[j] ? ohneFahrer : unterbesetzt;
                 List<int> liste;
-                if (!unterbesetzt.TryGetValue(k, out liste))
-                    unterbesetzt[k] = liste = new List<int>();
+                if (!ziel.TryGetValue(k, out liste))
+                    ziel[k] = liste = new List<int>();
                 if (liste.Count == 0 || liste[liste.Count - 1] != t) liste.Add(t);
             }
         }
 
+        const double NICHTFAHRER = 20;  // Nicht-Fahrer auf dem Fahrerposten: Fahrer gehen vor
         const double BLEIBEN = 30;    // Belohnung, mitten im Block auf dem Posten zu bleiben
         const double DRAUSSEN = 80;   // Strafe, über die erlaubte Zeit hinaus draussen zu bleiben (> 2 × BLEIBEN, damit ein Tausch lohnt)
 

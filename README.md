@@ -10,7 +10,8 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   «Im Plan einteilen» erscheinen nur als «Nicht eingeteilt» unten auf dem Plan
 - **Personen** mit Grad, Funktion und Ruhegruppe; «Fahrer» haben im Plan nur den Posten vom Typ «Fahrer»
   (z. B. Presto) und Ruhezeit, keine Essensstunde (sie essen in der Ruhezeit) und sind mit einem Auto markiert;
-  die Anzahl des Fahrerpostens ist das Soll, gemeldet wird erst, wenn gar kein Fahrer da ist
+  der erste Platz des Fahrerpostens ist für einen Fahrer, die weiteren Plätze bekommen Fahrer, wenn welche
+  da sind, sonst andere Leute
 - **Gruppen & Ruhezeiten**: tägliche Ruhefenster, auch über Mitternacht
 - **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
   Typ «Fahrer» (nur für Fahrer), «Pflicht» (muss immer voll besetzt sein, wird vor allen anderen besetzt),
