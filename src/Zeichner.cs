@@ -136,7 +136,17 @@ namespace ShiftDesk
                             var block = RectangleF.FromLTRB(spalteX(c0) + spalt / 2, zeileY(r0) + spalt / 2,
                                 spalteX(c1 + 1) - spalt / 2, zeileY(r1) + zeileH - spalt / 2);
                             Formen.Fuellen(g, block, radius * 1.6f, Leer);
-                            TextEinpassen(g, "Ruhezeit", block, tHell, u);
+                            // «Ruhezeit» in den längsten Abschnitt ohne Essens-Symbole
+                            int bestA = c0, bestL = 0, a = c0;
+                            for (int c = c0; c <= c1 + 1; c++)
+                            {
+                                bool frei = c <= c1 && !Enumerable.Range(r0, r1 - r0 + 1).Any(r => plan.Essen[r, erste + c]);
+                                if (frei) continue;
+                                if (c - a > bestL) { bestL = c - a; bestA = a; }
+                                a = c + 1;
+                            }
+                            if (bestL > 0)
+                                TextEinpassen(g, "Ruhezeit", RectangleF.FromLTRB(spalteX(bestA) + spalt / 2, block.Top, spalteX(bestA + bestL) - spalt / 2, block.Bottom), tHell, u);
                             c0 = c1 + 1;
                         }
                         r0 = r1 + 1;
