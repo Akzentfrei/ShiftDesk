@@ -76,6 +76,25 @@ namespace ShiftDesk
         }
     }
 
+    // Steuerelemente, die fürs Mausrad den Fokus brauchen, holen ihn sich beim Darüberfahren –
+    // aber nicht, solange jemand in einem Textfeld tippt (sonst gehen die nächsten Tasten ins Leere)
+    public static class Fokus
+    {
+        public static bool TextfeldAktiv(Control c)
+        {
+            var form = c.FindForm();
+            Control aktiv = form == null ? null : form.ActiveControl;
+            while (aktiv is ContainerControl && ((ContainerControl)aktiv).ActiveControl != null)
+                aktiv = ((ContainerControl)aktiv).ActiveControl;
+            return aktiv is TextBoxBase;
+        }
+
+        public static void FuerMausrad(Control c)
+        {
+            if (!TextfeldAktiv(c)) c.Focus();
+        }
+    }
+
     public class ModernButton : ThemaControl
     {
         public string Icon;
@@ -558,7 +577,7 @@ namespace ShiftDesk
 
         protected override void OnMouseEnter(EventArgs e)
         {
-            Focus();
+            Fokus.FuerMausrad(this);
             base.OnMouseEnter(e);
         }
 

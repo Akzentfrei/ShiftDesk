@@ -472,7 +472,7 @@ namespace ShiftDesk
             // Vorschau: Mausrad zoomt, Ziehen verschiebt, Doppelklick zoomt hinein bzw. passt ein
             vorschau = new ZoomPanel { Dock = DockStyle.Fill };
             vorschau.Paint += VorschauZeichnen;
-            vorschau.MouseEnter += (s, e) => { if (plan != null) vorschau.Focus(); };
+            vorschau.MouseEnter += (s, e) => { if (plan != null) Fokus.FuerMausrad(vorschau); };
             vorschau.MouseWheel += (s, e) =>
             {
                 if (plan == null) return;
@@ -885,7 +885,7 @@ namespace ShiftDesk
             txtName.Text = k.Name;
             dtStart.Wert = k.Start > new DateTime(2000, 1, 1) ? k.Start : DateTime.Today;
             dtEnde.Wert = k.Ende > new DateTime(2000, 1, 1) ? k.Ende : DateTime.Today.AddDays(1);
-            abloesung.Index = Math.Max(1, k.AbloesungStunden) - 1;
+            abloesung.Index = Math.Min(AbloesungListe.Length, Math.Max(1, k.AbloesungStunden)) - 1;
 
             plan = null;
             seite = 0;
@@ -939,10 +939,11 @@ namespace ShiftDesk
             return k;
         }
 
-        List<Posten> PostenEinlesen()
+        // auchOhneNamen: alle Zeilen der Tabelle (zum Umsortieren), sonst nur benannte Posten
+        List<Posten> PostenEinlesen(bool auchOhneNamen = false)
         {
             var liste = new List<Posten>();
-            foreach (var r in Zeilen(gridPosten))
+            foreach (var r in gridPosten.Rows.Cast<DataGridViewRow>().Where(r => auchOhneNamen || Wert(r, "Name") != ""))
             {
                 int anzahl;
                 int.TryParse(Wert(r, "Anzahl"), out anzahl);
@@ -993,7 +994,7 @@ namespace ShiftDesk
             benutzteTabellen.Add(grid);
             if (grid == gridPosten)
             {
-                var liste = PostenEinlesen();
+                var liste = PostenEinlesen(true);
                 if (i >= liste.Count || j >= liste.Count) return;
                 var p = liste[i];
                 liste[i] = liste[j];
@@ -1050,7 +1051,7 @@ namespace ShiftDesk
             else if (hinweise)
                 status.Setzen(plan.Warnungen.Count == 1 ? "1 Hinweis" : plan.Warnungen.Count + " Hinweise", "triangle-alert", Theme.Warnung);
             else
-                status.Setzen("Alle Posten besetzt, alle haben Essen", "circle-check", Theme.Erfolg);
+                status.Setzen(plan.Cfg.Essenszeiten.Count > 0 ? "Alle Posten besetzt, alle haben Essen" : "Alle Posten besetzt", "circle-check", Theme.Erfolg);
             lblSeite.Text = plan == null ? "" : "Seite " + (seite + 1) + " / " + plan.Seiten;
             btnZurueck.Visible = btnVor.Visible = plan != null && plan.Seiten > 1;
             lblSeite.Visible = plan != null;

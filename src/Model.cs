@@ -77,6 +77,10 @@ namespace ShiftDesk
         public static readonly string[] StandardGrade =
             { "Rekr", "Sdt", "Gfr", "Obgfr", "Kpl", "Wm", "Obwm", "Fw", "Four", "Hptfw", "Adj Uof", "Lt", "Oblt", "Hptm" };
 
+        // Dateiversion: 0 = von vor den frei definierbaren Funktionen und Graden (Feld fehlt in der Datei)
+        public const int AktuelleVersion = 2;
+        public int Version;
+
         public string Name = "Wachtablösung";
         // nur noch zum Lesen älterer Dateien, werden in Name übernommen
         public string Einheit;
@@ -102,6 +106,7 @@ namespace ShiftDesk
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(pfad)));
             var ser = new XmlSerializer(typeof(Konfiguration));
             Einheit = Zweck = null;
+            Version = AktuelleVersion;
             using (var fs = File.Create(pfad))
                 ser.Serialize(fs, this);
         }
@@ -115,11 +120,13 @@ namespace ShiftDesk
             if (!string.IsNullOrEmpty(k.Zweck) || !string.IsNullOrEmpty(k.Einheit))
                 k.Name = string.Join(" ", new[] { k.Zweck, k.Einheit }.Where(s => !string.IsNullOrEmpty(s)));
             k.Einheit = k.Zweck = null;
-            k.AeltereVersionUebernehmen();
+            if (k.Version < 2) k.AeltereVersionUebernehmen();
+            k.Version = AktuelleVersion;
             return k;
         }
 
-        // Dateien von vor den frei definierbaren Funktionen und Graden umwandeln
+        // Dateien von vor den frei definierbaren Funktionen und Graden umwandeln.
+        // Nur für Dateien ohne Versionsfeld: eine neue Datei darf absichtlich ohne Funktionen oder Grade sein.
         void AeltereVersionUebernehmen()
         {
             if (Funktionen.Count == 0)

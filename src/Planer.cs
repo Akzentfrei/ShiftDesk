@@ -120,6 +120,14 @@ namespace ShiftDesk
                 else if (!cfg.Posten.Any(k => k.Erlaubt(p.Funktion)))
                     plan.Warnungen.Add(Name(r) + ": kein Posten erlaubt die Funktion «" + p.Funktion + "».");
             }
+            // Posten, die eine inzwischen gelöschte Funktion erlauben (bleibt sonst unbemerkt unbesetzt)
+            foreach (var p in cfg.Posten)
+            {
+                var fehlt = p.Funktionen.Where(f => !cfg.Funktionen.Any(x => x.Name == f)).ToList();
+                if (fehlt.Count == 0) continue;
+                plan.Warnungen.Add("Posten «" + p.Name + "»: die Funktion «" + string.Join("», «", fehlt) + "» gibt es nicht mehr" +
+                    (fehlt.Count == p.Funktionen.Count ? ", niemand darf den Posten besetzen." : "."));
+            }
 
             var unterbesetzt = new Dictionary<int, List<int>>();   // Posten -> Stunden
             var essenGesehen = new Dictionary<long, HashSet<int>>();
@@ -203,7 +211,8 @@ namespace ShiftDesk
                         plaetze.Add(k);
             }
 
-            // Mitten in einer Ablösung: wer schon im Dienst war, bleibt auf seinem Posten (sofern er noch offen ist)
+            // Mitten in einer Ablösung: wer schon im Dienst war, bleibt auf seinem Posten (sofern er noch offen ist).
+            // Wer auf dem Auffangposten sitzt, wird neu verteilt und rückt nach, wenn ein Platz frei geworden ist.
             if (fortsetzen)
             {
                 var bleiben = new List<int>();
@@ -212,13 +221,10 @@ namespace ShiftDesk
                     int k = plan.Z[r, t - 1];
                     if (k < 0) continue;
                     var p = cfg.Posten[k];
-                    if (!p.OffenUm(h) || !p.Erlaubt(plan.Zeilen[r].Funktion)) continue;
-                    if (p.Typ != PostenTyp.Auffang)
-                    {
-                        int i = plaetze.IndexOf(k);
-                        if (i < 0) continue;
-                        plaetze.RemoveAt(i);
-                    }
+                    if (p.Typ == PostenTyp.Auffang || !p.OffenUm(h) || !p.Erlaubt(plan.Zeilen[r].Funktion)) continue;
+                    int i = plaetze.IndexOf(k);
+                    if (i < 0) continue;
+                    plaetze.RemoveAt(i);
                     plan.Z[r, t] = k;
                     anzahl[r, k]++;
                     bleiben.Add(r);
