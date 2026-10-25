@@ -42,13 +42,34 @@ build.bat
 
 Das erzeugt `ShiftDesk.exe` (eine einzelne Datei, keine Installation nötig).
 
+## Weitergeben
+
+```bat
+release.bat
+```
+
+baut die exe und packt sie mit `Anleitung.txt` in `ShiftDesk-<Version>.zip`. Diese Zip-Datei kann man
+verschicken (Mail-Anbieter blockieren oft .exe-Anhänge, auch in Zips; dann per OneDrive, Google Drive,
+WeTransfer o. ä. teilen). Vor jeder Weitergabe die Version in `src/Program.cs` erhöhen, damit die bereits
+installierte Version die Aktualisierung anbietet.
+
+Die exe ist nicht signiert. Beim ersten Start einer heruntergeladenen Datei warnt Windows SmartScreen
+(«Der Computer wurde durch Windows geschützt»); «Weitere Informationen → Trotzdem ausführen» startet sie.
+Die Anleitung in der Zip erklärt das.
+
 ## Installieren
 
-`ShiftDesk.exe` starten und in der Seitenleiste auf **«Auf diesem PC installieren»** klicken
-(oder `ShiftDesk.exe /install`). Installiert wird nur für den aktuellen Benutzer, ohne Administratorrechte:
+Wird `ShiftDesk.exe` aus einem fremden Ordner (Downloads, Zip, USB-Stick) gestartet, bietet sie selbst an,
+sich zu installieren; ist schon eine ältere Version installiert, bietet sie die Aktualisierung an. Das
+Angebot lässt sich mit «Ohne Installation starten» ablehnen oder mit `ShiftDesk.exe /portable`
+unterdrücken. Installieren geht auch später in der Seitenleiste über **«Auf diesem PC installieren»**
+oder mit `ShiftDesk.exe /install`. Installiert wird nur für den aktuellen Benutzer, ohne
+Administratorrechte:
 
-- Programm: `%LOCALAPPDATA%\Programs\ShiftDesk`
+- Programm: `%LOCALAPPDATA%\Programs\ShiftDesk` (die Herkunftsmarkierung «aus dem Internet» wird dabei
+  entfernt, damit SmartScreen nicht noch einmal warnt)
 - Startmenü-Eintrag (Windows-Suche)
+- Dateizuordnung für `.shiftdesk`
 - Eintrag unter *Einstellungen → Apps* zum Deinstallieren (`ShiftDesk.exe /uninstall`)
 
 Die zuletzt verwendeten Eingaben liegen unter `%APPDATA%\ShiftDesk\letzte.xml`.
@@ -66,7 +87,9 @@ Die zuletzt verwendeten Eingaben liegen unter `%APPDATA%\ShiftDesk\letzte.xml`.
 | `src/Steuerelemente.cs`, `src/Popups.cs` | Eigene Steuerelemente und Aufklapplisten |
 | `src/Theme.cs` | Farben hell/dunkel |
 | `src/Lucide.cs`, `src/LucideDaten.cs` | Icon-Zeichner und eingebettete Icons |
-| `src/Installation.cs` | Installieren / Deinstallieren |
+| `src/Installation.cs` | Installieren / Aktualisieren / Deinstallieren |
+| `src/Dialoge.cs` | Rückfragen (Gefahr rot, Vorschlag blau) |
+| `release.bat`, `Anleitung.txt` | Zip zum Weitergeben |
 
 ## Lizenzen
 

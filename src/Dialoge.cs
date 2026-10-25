@@ -12,16 +12,26 @@ namespace ShiftDesk
         public static bool Fragen(IWin32Window besitzer, string titel, string text, string knopf,
             string symbol = "triangle-alert", string abbrechen = "Abbrechen")
         {
-            using (var d = new GefahrDialog(besitzer != null, titel, text, knopf, symbol, abbrechen))
+            using (var d = new GefahrDialog(besitzer != null, titel, text, knopf, symbol, abbrechen, true))
+                return d.ShowDialog(besitzer) == DialogResult.OK;
+        }
+
+        // Gleiche Rückfrage ohne Gefahr: blauer Hauptknopf links, der den Fokus hat (Enter = Ja)
+        public static bool Vorschlagen(IWin32Window besitzer, string titel, string text, string knopf,
+            string symbol = "circle-check", string abbrechen = "Nicht jetzt")
+        {
+            using (var d = new GefahrDialog(besitzer != null, titel, text, knopf, symbol, abbrechen, false))
                 return d.ShowDialog(besitzer) == DialogResult.OK;
         }
 
         readonly string symbol;
+        readonly bool gefahr;
         readonly int fussOben;
 
-        GefahrDialog(bool mitBesitzer, string titel, string text, string knopf, string symbol, string abbrechen)
+        GefahrDialog(bool mitBesitzer, string titel, string text, string knopf, string symbol, string abbrechen, bool gefahr)
         {
             this.symbol = symbol;
+            this.gefahr = gefahr;
             Text = "ShiftDesk";
             Font = new Font("Segoe UI", 9.5f);
             AutoScaleMode = AutoScaleMode.None;
@@ -47,7 +57,7 @@ namespace ShiftDesk
             }
             unten = Math.Max(unten, rand + Theme.S(40));
 
-            var btnOk = new ModernButton(knopf, null) { Gefahr = true, Fokusrahmen = true, Untergrundfarbe = Theme.Hintergrund, TabIndex = 0 };
+            var btnOk = new ModernButton(knopf, null) { Gefahr = gefahr, Primaer = !gefahr, Fokusrahmen = true, Untergrundfarbe = Theme.Hintergrund, TabIndex = 0 };
             var btnAbbrechen = new ModernButton(abbrechen, null) { Fokusrahmen = true, Untergrundfarbe = Theme.Hintergrund, TabIndex = 1 };
             btnOk.Click += (s, e) => DialogResult = DialogResult.OK;
             btnAbbrechen.Click += (s, e) => DialogResult = DialogResult.Cancel;
@@ -59,7 +69,7 @@ namespace ShiftDesk
             Controls.Add(btnOk);
             Controls.Add(btnAbbrechen);
             ClientSize = new Size(breite, knopfY + btnAbbrechen.Height + Theme.S(16));
-            ActiveControl = btnAbbrechen;
+            ActiveControl = gefahr ? btnAbbrechen : btnOk;
         }
 
         Label TextLabel(string text, Font font, Color farbe, int x, int y, int breite)
@@ -102,12 +112,13 @@ namespace ShiftDesk
                 g.FillRectangle(b, 0, fussOben, ClientSize.Width, ClientSize.Height - fussOben);
             using (var p = new Pen(Theme.Rand))
                 g.DrawLine(p, 0, fussOben, ClientSize.Width, fussOben);
-            // Symbol im roten Kreis
+            // Symbol im roten (Gefahr) oder blauen Kreis
             g.SmoothingMode = SmoothingMode.AntiAlias;
             int d = Theme.S(40), icon = Theme.S(20), x = Theme.S(24), y = Theme.S(24);
-            using (var b = new SolidBrush(Color.FromArgb(Theme.Dunkel ? 48 : 26, Theme.Gefahr)))
+            Color farbe = gefahr ? Theme.Gefahr : Theme.Akzent;
+            using (var b = new SolidBrush(Color.FromArgb(Theme.Dunkel ? 48 : 26, farbe)))
                 g.FillEllipse(b, x, y, d, d);
-            Lucide.Zeichne(g, symbol, new RectangleF(x + (d - icon) / 2f, y + (d - icon) / 2f, icon, icon), Theme.Gefahr);
+            Lucide.Zeichne(g, symbol, new RectangleF(x + (d - icon) / 2f, y + (d - icon) / 2f, icon, icon), farbe);
         }
     }
 }

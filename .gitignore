@@ -1,6 +1,7 @@
-# Build-Ergebnis (mit build.bat neu erzeugen)
+# Build-Ergebnis (mit build.bat bzw. release.bat neu erzeugen)
 *.exe
 *.pdb
+*.zip
 
 # Testordner und Ausgaben
 _test/

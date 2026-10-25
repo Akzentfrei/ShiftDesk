@@ -45,6 +45,67 @@ namespace ShiftDesk
             return Process.GetProcessesByName("ShiftDesk").Any(p => p.Id != ich);
         }
 
+        static Version EigeneVersion
+        {
+            get { return Assembly.GetExecutingAssembly().GetName().Version; }
+        }
+
+        // Version der installierten exe, null wenn keine da ist
+        static Version InstallierteVersion
+        {
+            get
+            {
+                if (!File.Exists(Exe)) return null;
+                try
+                {
+                    string v = FileVersionInfo.GetVersionInfo(Exe).FileVersion;
+                    Version ergebnis;
+                    return Version.TryParse(v, out ergebnis) ? ergebnis : new Version(0, 0);
+                }
+                catch { return new Version(0, 0); }
+            }
+        }
+
+        // Beim Start aus einem fremden Ordner (Downloads, Zip, USB-Stick): Installation bzw. Aktualisierung anbieten.
+        // Gibt true zurück, wenn installiert wurde und die installierte Kopie läuft – dann endet diese hier.
+        public static bool BeimStartAnbieten()
+        {
+            if (LaeuftInstalliert) return false;
+            Version alt = InstallierteVersion, neu = EigeneVersion;
+            bool ja;
+            if (alt == null)
+                ja = GefahrDialog.Vorschlagen(null, "ShiftDesk auf diesem PC installieren?",
+                    "ShiftDesk wird in dein Benutzerprofil kopiert und ins Startmenü eingetragen. Das braucht keine Administratorrechte. " +
+                    "Du kannst das Programm aber auch ohne Installation direkt benutzen.", "Installieren", "download", "Ohne Installation starten");
+            else if (alt < neu)
+                ja = GefahrDialog.Vorschlagen(null, "Installiertes ShiftDesk aktualisieren?",
+                    "Auf diesem PC ist ShiftDesk " + alt.ToString(3) + " installiert. Diese Datei ist die neuere Version " + neu.ToString(3) + ".",
+                    "Aktualisieren", "sparkles", "Ohne Installation starten");
+            else
+                return false;   // dieselbe oder eine neuere Version ist schon installiert: einfach starten
+            if (!ja) return false;
+            if (!Installieren(true)) return false;
+            try
+            {
+                Process.Start(Exe);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+        static extern bool DeleteFile(string pfad);
+
+        // Die Herkunftsmarkierung («aus dem Internet») der kopierten exe entfernen,
+        // sonst warnt Windows auch beim Start aus dem Startmenü noch einmal.
+        static void HerkunftEntfernen(string pfad)
+        {
+            try { DeleteFile(pfad + ":Zone.Identifier"); } catch { }
+        }
+
         // Gibt true zurück, wenn installiert wurde
         public static bool Installieren(bool leise)
         {
@@ -65,12 +126,15 @@ namespace ShiftDesk
             {
                 Directory.CreateDirectory(Ordner);
                 if (!LaeuftInstalliert)
+                {
                     File.Copy(Application.ExecutablePath, Exe, true);
+                    HerkunftEntfernen(Exe);
+                }
 
                 VerknuepfungErstellen();
                 DateizuordnungEintragen();
 
-                string version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+                string version = EigeneVersion.ToString(3);
                 using (var k = Registry.CurrentUser.CreateSubKey(RegistryPfad))
                 {
                     k.SetValue("DisplayName", "ShiftDesk");

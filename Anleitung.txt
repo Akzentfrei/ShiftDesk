@@ -1,0 +1,26 @@
+﻿ShiftDesk – Ablöseplanung
+=========================
+
+So installierst du ShiftDesk (Windows 10 oder 11, keine Administratorrechte nötig):
+
+1. Die Zip-Datei entpacken (Rechtsklick → «Alle extrahieren…»).
+2. ShiftDesk.exe doppelklicken.
+3. Windows warnt beim ersten Start vor Programmen aus dem Internet. Je nach Einstellung:
+   - «Der Computer wurde durch Windows geschützt»: auf «Weitere Informationen» und dann
+     auf «Trotzdem ausführen» klicken.
+   - «Der Herausgeber konnte nicht verifiziert werden»: auf «Ausführen» klicken.
+   Das kommt, weil das Programm nicht bei Microsoft registriert ist. Es ist unbedenklich
+   und erscheint nur beim allerersten Start.
+4. ShiftDesk fragt, ob es installiert werden soll: «Installieren» wählen.
+
+Danach findest du ShiftDesk im Startmenü und über die Windows-Suche. Die entpackte Datei
+kannst du anschliessend löschen.
+
+Ohne Installation: In Schritt 4 «Ohne Installation starten» wählen. Dann läuft ShiftDesk
+direkt aus dem Ordner, in dem es liegt (z. B. auf einem USB-Stick).
+
+Deinstallieren: Einstellungen → Apps → ShiftDesk → Deinstallieren.
+Pläne, die du als .shiftdesk-Datei gespeichert hast, bleiben dabei erhalten.
+
+Neue Version: einfach die neue ShiftDesk.exe starten. Sie bietet an, die installierte
+Version zu aktualisieren.
