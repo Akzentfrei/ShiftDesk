@@ -12,7 +12,8 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   (z. B. Presto) und Ruhezeit, keine Essensstunde (sie essen in der Ruhezeit) und sind mit einem Auto markiert;
   der erste Platz des Fahrerpostens ist für einen Fahrer, die weiteren Plätze bekommen Fahrer, wenn welche
   da sind, sonst andere Leute
-- **Gruppen & Ruhezeiten**: tägliche Ruhefenster, auch über Mitternacht
+- **Gruppen & Ruhezeiten**: tägliche Ruhefenster, auch über Mitternacht; der Wacht Kdt Stv braucht keine Gruppe,
+  er ruht immer dann, wenn der Wacht Kdt im Dienst ist
 - **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
   Typ «Fahrer» (nur für Fahrer) und «Draussen» (Posten im Freien, in der Legende mit Schneeflocke);
   die Posten Wacht Kdt, Presto und Subito gibt es immer. Alle Posten sollen voll besetzt sein, reichen die
@@ -24,9 +25,11 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 - **Gesunderhaltung**: niemand ist länger als eingestellt (z. B. 2 Stunden) am Stück draussen; bei längeren
   Ablöseblöcken tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis
 - **Essenszeiten**: jede Person, die das ganze Fenster im Dienst ist, bekommt eine Essensstunde auf einem
-  Posten mit «Essen möglich»; wer zur Essenszeit in Ruhe ist, isst in der Ruhezeit (im Plan ebenfalls markiert); klappt es nicht für alle,
-  gibt es keinen Hinweis, die Wache löst dann vor Ort kurz ab
-- **Plan** über mehrere Tage, Ablösung jede Stunde oder alle 2–4 Stunden, wahlweise mit einem Zeitfenster
+  Posten mit «Essen»; wer zur Essenszeit in Ruhe ist, isst in der Ruhezeit (im Plan ebenfalls markiert); wer auf
+  keinem Posten mit Essen war, bekommt ein oranges Besteck: eine Reserve löst zum Essen ab (nicht beim Wacht Kdt
+  und Stv und nicht bei Fahrern)
+- **Plan** als Tagesplan (ein Blatt von 00:00 bis 24:00 ohne Datum, gilt jeden Tag) oder über mehrere Tage mit
+  Datum, Ablösung jede Stunde oder alle 2–4 Stunden, wahlweise mit einem Zeitfenster
   (z. B. 00:00 bis 06:00), in dem trotzdem jede Stunde abgelöst wird; jede Erstellung ergibt eine neue
   faire Variante (Zuteilung mit der Ungarischen Methode)
 - **Ausdruck** im Aufbau des Formulars «Ablösungsliste» mit Armee-Logo, auf Deutsch, Französisch, Italienisch
@@ -34,6 +37,7 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   Buchstaben (A, B, C …) auf hellen Postenfarben, ein Feld pro Ablösung, «-» für Ruhezeit, dicke Linien
   zwischen Zweierteams und Blöcken, Stunden senkrecht auf den Linien (0000 bis 2400)
 - Vorschau mit Zoom (Mausrad, Doppelklick), Drucken, PDF (Microsoft Print to PDF) und Excel (.xlsx)
+- Merkt sich die Fenstergrösse; die Seitenleiste lässt sich auf Symbole einklappen
 - Statistik pro Person und Posten
 - Passt sich der Fenstergrösse an: im schmalen Fenster zeigt die Seitenleiste nur Symbole (Datei-Befehle im
   Menü, wenn die Höhe nicht reicht), Knöpfe nur ihr Symbol, die Plan-Einstellungen stehen über statt neben der

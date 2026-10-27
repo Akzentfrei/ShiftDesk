@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Printing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -32,6 +33,8 @@ namespace ShiftDesk
     {
         static readonly string AutoPfad = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShiftDesk", "letzte.xml");
+        // Lage und Grösse des Fensters beim letzten Schliessen: «x y breite höhe maximiert»
+        static readonly string FensterPfad = Path.Combine(Path.GetDirectoryName(AutoPfad), "fenster.txt");
         static readonly string[] StundenListe = Enumerable.Range(0, 24).Select(h => Zeit.Text(h)).ToArray();
         static readonly string[] TypListe = { "Normal", "Auffang", "Fahrer" };
         static readonly string[] AbloesungListe = { "Jede Stunde", "Alle 2 Stunden", "Alle 3 Stunden", "Alle 4 Stunden" };
@@ -50,6 +53,7 @@ namespace ShiftDesk
 
         Panel inhalt;
         readonly Uebergang uebergang = new Uebergang();
+        readonly Rueckmeldung rueckmeldung = new Rueckmeldung();   // z. B. «Gespeichert»
         readonly List<KeyValuePair<NavEintrag, Control>> navigation = new List<KeyValuePair<NavEintrag, Control>>();
         DataGridView gridFunktionen, gridGrade, gridPersonen, gridGruppen, gridPosten, gridEssen;
         Tabelle statistik;
@@ -57,12 +61,19 @@ namespace ShiftDesk
 
         // Seitenleiste: oben Marke und Seiten, unten die Datei-Befehle (oder ein Datei-Menü, wenn die Höhe nicht reicht)
         PufferPanel seitenleiste;
-        SymbolKnopf leisteKnopf;   // Seitenleiste von Hand ein- und ausklappen
+        SymbolKnopf leisteKnopf;   // Seitenleiste von Hand ein- und ausklappen (oben rechts)
         bool? leisteEingeklappt;   // null = je nach Fensterbreite
-        readonly Timer leisteTimer = new Timer { Interval = 10 };   // weiches Ein-/Ausfahren
+        // weiches Ein-/Ausfahren: eigene Zeichenschleife (Application.Idle), gleichmässiger als ein Timer
+        bool leisteFaehrt;
         int leisteVon, leisteZiel;
-        DateTime leisteStart;
-        const int LeisteDauer = 200;   // Millisekunden
+        readonly System.Diagnostics.Stopwatch leisteUhr = new System.Diagnostics.Stopwatch();
+        const int LeisteDauer = 220;   // Millisekunden
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct Nachricht { public IntPtr Fenster; public uint Art; public IntPtr W, L; public uint Zeit; public Point Ort; }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool PeekMessage(out Nachricht n, IntPtr fenster, uint von, uint bis, uint entfernen);
         readonly List<Control> seitenleisteOben = new List<Control>(), seitenleisteUnten = new List<Control>();
         readonly List<Tuple<string, string, Action>> dateiBefehle = new List<Tuple<string, string, Action>>();
         NavEintrag dateiMenue;
@@ -70,6 +81,9 @@ namespace ShiftDesk
         // Plan-Seite
         Eingabefeld txtName, txtEinheit;
         DatumFeld dtStart, dtEnde;
+        AuswahlFeld planArt;   // Tagesplan oder Zeitraum mit Datum
+        Panel feldStart, feldEnde;
+        static readonly string[] PlanArtListe = { "Tagesplan (jeden Tag)", "Zeitraum mit Datum" };
         AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis, teams, sprache;
         Panel planKoerper, planRechts;
         Karte einstellungen;
@@ -103,6 +117,7 @@ namespace ShiftDesk
             Size = new Size(Math.Min(Theme.S(1440), bildschirm.Width), Math.Min(Theme.S(920), bildschirm.Height));
             MinimumSize = new Size(Math.Min(Theme.S(800), bildschirm.Width), Math.Min(Theme.S(560), bildschirm.Height));
             StartPosition = FormStartPosition.CenterScreen;
+            FensterWiederherstellen();
 
             SuspendLayout();
             inhalt = new Panel { Dock = DockStyle.Fill };
@@ -121,6 +136,7 @@ namespace ShiftDesk
                 s.Item3.Visible = false;
                 inhalt.Controls.Add(s.Item3);
             }
+            Controls.Add(rueckmeldung);
             Controls.Add(uebergang);
             Controls.Add(inhalt);
             Controls.Add(Seitenleiste(seiten));
@@ -162,7 +178,47 @@ namespace ShiftDesk
                 Theme.Geaendert -= themaGeaendert;
                 try { Einlesen().Speichern(AutoPfad); }
                 catch { }
+                FensterMerken();
             };
+        }
+
+        // Wieder in der Grösse und an der Stelle vom letzten Mal aufgehen. Ist der Bildschirm dafür zu klein
+        // (z. B. ein anderer Bildschirm), geht das Fenster in der kleinsten Grösse mittig auf.
+        void FensterWiederherstellen()
+        {
+            int[] w;
+            try { w = File.ReadAllText(FensterPfad).Trim().Split(' ').Select(x => int.Parse(x, CultureInfo.InvariantCulture)).ToArray(); }
+            catch { return; }   // noch nie geschlossen oder unlesbar: Standardgrösse
+            if (w.Length < 5 || w[2] <= 0 || w[3] <= 0) return;
+            var r = new Rectangle(w[0], w[1], w[2], w[3]);
+            var bereich = Screen.FromRectangle(r).WorkingArea;
+            if (r.Width <= bereich.Width && r.Height <= bereich.Height)
+            {
+                // ganz auf den Bildschirm schieben, falls es teilweise daneben liegt
+                r.X = Math.Max(bereich.Left, Math.Min(r.X, bereich.Right - r.Width));
+                r.Y = Math.Max(bereich.Top, Math.Min(r.Y, bereich.Bottom - r.Height));
+            }
+            else
+            {
+                var klein = new Size(Math.Min(MinimumSize.Width, bereich.Width), Math.Min(MinimumSize.Height, bereich.Height));
+                r = new Rectangle(bereich.Left + (bereich.Width - klein.Width) / 2, bereich.Top + (bereich.Height - klein.Height) / 2, klein.Width, klein.Height);
+            }
+            StartPosition = FormStartPosition.Manual;
+            Bounds = r;
+            if (w[4] == 1) WindowState = FormWindowState.Maximized;
+        }
+
+        void FensterMerken()
+        {
+            // maximiert oder minimiert: die Grösse des normalen Fensters merken
+            var r = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            int maximiert = WindowState == FormWindowState.Maximized ? 1 : 0;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(FensterPfad));
+                File.WriteAllText(FensterPfad, string.Join(" ", new[] { r.X, r.Y, r.Width, r.Height, maximiert }.Select(x => x.ToString(CultureInfo.InvariantCulture))));
+            }
+            catch { }
         }
 
         void Thema(Action a)
@@ -237,17 +293,8 @@ namespace ShiftDesk
             leisteKnopf.Click += (s, e) =>
             {
                 // von Hand umschalten; die Wahl gilt dann auch bei anderer Fensterbreite
-                leisteEingeklappt = (leisteTimer.Enabled ? leisteZiel : seitenleiste.Width) >= Theme.S(150);
+                leisteEingeklappt = (leisteFaehrt ? leisteZiel : seitenleiste.Width) >= Theme.S(150);
                 SeitenleisteBreite(true);
-            };
-            leisteTimer.Tick += (s, e) =>
-            {
-                double t = Math.Min(1, (DateTime.Now - leisteStart).TotalMilliseconds / LeisteDauer);
-                double weich = 1 - Math.Pow(1 - t, 3);   // bremst zum Ende hin ab
-                int breite = leisteVon + (int)Math.Round((leisteZiel - leisteVon) * weich);
-                seitenleiste.Width = breite;
-                inhalt.Left = breite;
-                if (t >= 1) LeisteFertig();
             };
 
             foreach (var c in seitenleisteOben.Concat(seitenleisteUnten)) seitenleiste.Controls.Add(c);
@@ -268,61 +315,82 @@ namespace ShiftDesk
             if (animiert && Visible)
             {
                 if (seitenleiste.Width == breite) return;
+                // der Inhalt wächst bzw. schrumpft bei jedem Schritt mit: der rechte Rand bleibt fest, nichts springt
                 leisteVon = seitenleiste.Width;
                 leisteZiel = breite;
-                leisteStart = DateTime.Now;
-                // Neu anordnen ist teuer: während der Fahrt behält der Inhalt seine Grösse und wird nur verschoben.
-                // Beim Ausfahren bekommt er gleich die neue, schmalere Breite, beim Einfahren erst am Schluss die breitere.
-                int w = ClientSize.Width;
-                inhalt.Dock = DockStyle.None;
-                inhalt.Bounds = new Rectangle(leisteVon, 0, Math.Min(w - leisteVon, w - leisteZiel), ClientSize.Height);
-                leisteTimer.Start();
+                leisteUhr.Restart();
+                if (!leisteFaehrt)
+                {
+                    leisteFaehrt = true;
+                    Application.Idle += LeisteFahren;
+                }
                 return;
             }
             LeisteFertig();
             if (seitenleiste.Width != breite) seitenleiste.Width = breite;
         }
 
-        // Fahrt beenden: der Inhalt füllt wieder den Platz neben der Seitenleiste
+        // Solange keine Nachricht wartet, ein Bild nach dem anderen zeichnen
+        void LeisteFahren(object sender, EventArgs e)
+        {
+            Nachricht n;
+            while (leisteFaehrt && !PeekMessage(out n, IntPtr.Zero, 0, 0, 0))
+            {
+                double t = Math.Min(1, leisteUhr.Elapsed.TotalMilliseconds / LeisteDauer);
+                double weich = 1 - Math.Pow(1 - t, 3);   // bremst zum Ende hin ab
+                int breite = leisteVon + (int)Math.Round((leisteZiel - leisteVon) * weich);
+                if (breite != seitenleiste.Width)
+                {
+                    seitenleiste.Width = breite;
+                    Update();
+                }
+                else System.Threading.Thread.Sleep(1);
+                if (t >= 1) LeisteFertig();
+            }
+        }
+
         void LeisteFertig()
         {
-            leisteTimer.Stop();
-            if (inhalt.Dock != DockStyle.Fill) inhalt.Dock = DockStyle.Fill;
+            if (!leisteFaehrt) return;
+            leisteFaehrt = false;
+            Application.Idle -= LeisteFahren;
+            seitenleiste.PerformLayout();   // jetzt die richtigen Breiten und, wenn eingeklappt, nur die Symbole
         }
 
         void SeitenleisteAnordnen()
         {
-            bool schmal = seitenleiste.Width < Theme.S(150);
-            int rand = schmal ? Theme.S(10) : Theme.S(14);
-            int x = rand, w = seitenleiste.ClientSize.Width - 2 * rand - 1, y = Theme.S(8);
+            // Während der Fahrt behalten die Einträge ihre volle Breite und ihren Text: die Leiste schneidet sie nur
+            // ab, so muss nichts neu gezeichnet werden. Erst am Schluss wird auf die Symbole umgestellt.
+            bool schmal = !leisteFaehrt && seitenleiste.Width < Theme.S(150);
+            bool ohneLogo = seitenleiste.Width < Theme.S(120);   // dort steht der Knopf zum Ausklappen
+            // gleicher Rand in beiden Zuständen, damit beim Ein-/Ausklappen nichts springt
+            int rand = Theme.S(10);
+            int x = rand, y = Theme.S(8);
+            int w = (leisteFaehrt ? Math.Max(leisteVon, leisteZiel) : seitenleiste.ClientSize.Width) - 2 * rand - 1;
             foreach (var c in seitenleisteOben.Concat(seitenleisteUnten).Concat(new[] { dateiMenue }))
             {
                 var n = c as NavEintrag;
                 if (n != null) n.Schmal = schmal;
                 var m = c as Marke;
-                if (m != null && m.Schmal != schmal) { m.Schmal = schmal; m.Invalidate(); }
+                if (m != null && m.Schmal != ohneLogo) { m.Schmal = ohneLogo; m.Invalidate(); }
                 var a = c as Abschnitt;
                 if (a != null && a.Schmal != schmal) { a.Schmal = schmal; a.Invalidate(); }
             }
             int unten = seitenleiste.ClientSize.Height - Theme.S(14);
             // sehr niedriges Fenster: Einträge rücken zusammen, damit nichts unter dem Datei-Menü verschwindet
             int seitenAnzahl = seitenleisteOben.OfType<NavEintrag>().Count();
-            bool eng = Theme.S(8 + 72 + 34) + (schmal ? Theme.S(36) : 0) + seitenAnzahl * Theme.S(42) + Theme.S(8) + dateiMenue.Height > unten;
+            bool eng = Theme.S(8 + 72 + 34) + seitenAnzahl * Theme.S(42) + Theme.S(8) + dateiMenue.Height > unten;
             foreach (var c in seitenleisteOben)
             {
                 int h = c is NavEintrag ? Theme.S(eng ? 36 : 42) : c is Marke ? Theme.S(eng ? 56 : 72) : Theme.S(eng ? 22 : 34);
                 c.SetBounds(x, y, w, h);
                 y += h;
                 if (!(c is Marke)) continue;
-                // Knopf zum Ein-/Ausklappen: breit rechts neben dem Logo, schmal darunter
+                // Knopf zum Ein-/Ausklappen oben rechts: fester Abstand zum rechten Rand, so fährt er beim
+                // Ein-/Ausklappen gleichmässig mit und steht eingeklappt mittig an der Stelle des Logos
                 leisteKnopf.Icon = schmal ? "panel-left-open" : "panel-left-close";
                 leisteKnopf.Tipp = schmal ? "Seitenleiste ausklappen" : "Seitenleiste einklappen";
-                if (schmal)
-                {
-                    leisteKnopf.Location = new Point((seitenleiste.ClientSize.Width - leisteKnopf.Width) / 2, y);
-                    y += leisteKnopf.Height + Theme.S(4);
-                }
-                else leisteKnopf.Location = new Point(x + w - leisteKnopf.Width, c.Top + (h - leisteKnopf.Height) / 2);
+                leisteKnopf.Location = new Point(seitenleiste.ClientSize.Width - Theme.S(20) - leisteKnopf.Width, c.Top + (h - leisteKnopf.Height) / 2);
                 leisteKnopf.Invalidate();
             }
             int untenH = seitenleisteUnten.Sum(c => c.Height);
@@ -414,8 +482,8 @@ namespace ShiftDesk
             Action rand = () =>
             {
                 var p = seitePanel.Width < Theme.S(860)
-                    ? new Padding(Theme.S(20), Theme.S(16), Theme.S(20), Theme.S(20))
-                    : new Padding(Theme.S(32), Theme.S(24), Theme.S(32), Theme.S(28));
+                    ? new Padding(Theme.S(10), Theme.S(8), Theme.S(10), Theme.S(10))
+                    : new Padding(Theme.S(16), Theme.S(12), Theme.S(16), Theme.S(14));
                 if (seitePanel.Padding != p) seitePanel.Padding = p;
             };
             seitePanel.Resize += (s, e) => rand();
@@ -559,12 +627,15 @@ namespace ShiftDesk
             t.Spalte("Grad", "Grad", 50, new SpaltenInfo(SpaltenArt.Auswahl, () => Namen(gridGrade), Waehlen));
             t.Spalte("Name", "Name", 130, new SpaltenInfo(SpaltenArt.Text) { Symbol = r => Schalter(r, "Fahrer") ? "car" : null }, 120);
             t.Spalte("Funktion", "Funktion", 85, new SpaltenInfo(SpaltenArt.Auswahl, () => Namen(gridFunktionen), Waehlen));
-            t.Spalte("Gruppe", "Gruppe (Ruhezeit)", 85, new SpaltenInfo(SpaltenArt.Auswahl, () => new[] { "" }.Concat(Namen(gridGruppen)), Keine));
+            t.Spalte("Gruppe", "Gruppe (Ruhezeit)", 85, new SpaltenInfo(SpaltenArt.Auswahl, () => new[] { "" }.Concat(Namen(gridGruppen)), Keine)
+            {
+                FesterText = r => Konfiguration.IstStv(Wert(r, "Funktion")) ? GegenteilKdt : null,
+            });
             t.Spalte("Fahrer", "Fahrer", 42, new SpaltenInfo(SpaltenArt.Schalter));
             Zeilenknoepfe(t, true);
             t.Erklaeren("Grad", "Wählst du aus der Liste der Seite «Funktionen & Grade».");
             t.Erklaeren("Funktion", "Wählst du aus der Liste der Seite «Funktionen & Grade». Die Funktion bestimmt, welche Posten die Person besetzen darf.");
-            t.Erklaeren("Gruppe", "Die Gruppe bestimmt die Ruhezeit (Seite «Gruppen & Ruhezeiten»). Ohne Gruppe hat die Person keine Ruhezeit.");
+            t.Erklaeren("Gruppe", "Die Gruppe bestimmt die Ruhezeit (Seite «Gruppen & Ruhezeiten»). Ohne Gruppe hat die Person keine Ruhezeit. Der Wacht Kdt Stv braucht keine: er ruht immer dann, wenn der Wacht Kdt im Dienst ist.");
             t.Erklaeren("Fahrer", "Fahrer haben im Plan nur den Posten vom Typ «Fahrer» (z. B. Presto) und Ruhezeit, sonst nichts, auch keine Essensstunde: sie essen in der Ruhezeit. Im Plan sind sie mit einem Auto markiert.");
             t.LeerHinweis = new[] { "users", "Noch keine Personen", "Mit «Person hinzufügen» oben rechts die Wache erfassen." };
             return NeueSeite("Personen",
@@ -585,7 +656,7 @@ namespace ShiftDesk
             t.Erklaeren("Von", "Von wann bis wann die Gruppe ruht, auch über Mitternacht (z. B. 23:00 bis 07:00). Gleiche Zeit bei «von» und «bis» bedeutet keine Ruhezeit.");
             t.LeerHinweis = new[] { "moon", "Noch keine Gruppen", "Mit «Gruppe hinzufügen» oben rechts eine erfassen." };
             return NeueSeite("Gruppen & Ruhezeiten",
-                "Jede Gruppe ruht jeden Tag im gleichen Zeitfenster. Auch die Wachtkommandanten brauchen je eine Gruppe.",
+                "Jede Gruppe ruht jeden Tag im gleichen Zeitfenster. Auch der Wacht Kdt braucht eine Gruppe; der Wacht Kdt Stv ruht automatisch, wenn der Wacht Kdt im Dienst ist.",
                 t.Karte,
                 Knopf("Gruppe hinzufügen", "plus", () => Hinzufuegen(gridGruppen, "", Zeit.Text(23), Zeit.Text(7)), true));
         }
@@ -658,10 +729,12 @@ namespace ShiftDesk
 
         Panel SeitePlan()
         {
-            txtName = new Eingabefeld { Width = Theme.S(280) };
+            txtName = new Eingabefeld { Width = Theme.S(380) };
             txtEinheit = new Eingabefeld { Width = Theme.S(200) };
             dtStart = new DatumFeld();
             dtEnde = new DatumFeld();
+            planArt = new AuswahlFeld(PlanArtListe) { Width = Theme.S(220) };
+            planArt.WertGeaendert += (s, e) => PlanArtAnzeigen();
             sprache = new AuswahlFeld(Druck.Sprachen.Select(s => s.Name).ToArray()) { Width = Theme.S(140) };
             abloesung = new AuswahlFeld(AbloesungListe) { Width = Theme.S(170) };
             stuendlichVon = new AuswahlFeld(StundenListe) { Width = Theme.S(100) };
@@ -684,8 +757,10 @@ namespace ShiftDesk
                 felder.Controls.Add(a);
             };
             abschnitt("Zeitraum");
-            felder.Controls.Add(Feld("Start", dtStart));
-            felder.Controls.Add(Feld("Ende", dtEnde, "Der Plan kann über mehrere Tage gehen (höchstens 31). Je 24 Stunden kommen auf eine Seite."));
+            felder.Controls.Add(Feld("Art", planArt,
+                "«Tagesplan»: ein Blatt von 00:00 bis 24:00 ohne Datum, das jeden Tag gilt (jeden Tag hat dieselbe Person zur selben Zeit denselben Posten). «Zeitraum mit Datum»: der Plan läuft von Start bis Ende über mehrere Tage und verteilt die Posten über alle Tage gerecht."));
+            felder.Controls.Add(feldStart = Feld("Start", dtStart));
+            felder.Controls.Add(feldEnde = Feld("Ende", dtEnde, "Der Plan kann über mehrere Tage gehen (höchstens 31). Je 24 Stunden kommen auf eine Seite."));
             abschnitt("Ablösung");
             felder.Controls.Add(Feld("Ablösung", abloesung, "Wie oft die Posten wechseln, ab Mitternacht gerechnet (z. B. alle 2 Stunden: 00:00, 02:00, 04:00 …)."));
             felder.Controls.Add(Feld("Jede Stunde von", stuendlichVon, "In diesem Zeitfenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst. Gleiche Zeit bei «von» und «bis» = kein Fenster.", true));
@@ -701,7 +776,7 @@ namespace ShiftDesk
                 "Steht auf dem Ausdruck bei «Einheit». Ändert den Plan nicht und ist sofort in der Vorschau zu sehen.", true));
             felder.Controls.Add(Feld("Sprache", sprache,
                 "Sprache des Ausdrucks (Deutsch, Französisch, Italienisch oder Englisch). Namen von Posten, Funktionen und Personen bleiben so, wie du sie erfasst hast.", true));
-            einstellungenBild = new BildlaufPanel(felder) { Dock = DockStyle.Fill, OhneLeiste = true };
+            einstellungenBild = new BildlaufPanel(felder) { Dock = DockStyle.Fill };
             einstellungen = new Karte();
             einstellungen.Controls.Add(einstellungenBild);
             Thema(() => { einstellungen.BackColor = felder.BackColor = einstellungenBild.BackColor = Theme.Karte; });
@@ -909,6 +984,8 @@ namespace ShiftDesk
             return s == "" ? "Wählen…" : s;
         }
 
+        const string GegenteilKdt = "Gegenteil Wacht Kdt";
+
         static string Keine(string s)
         {
             return s == "" ? "Keine" : s;
@@ -1065,6 +1142,8 @@ namespace ShiftDesk
             txtName.Text = k.Name;
             txtEinheit.Text = k.Einheit ?? "";
             sprache.Index = Math.Max(0, Array.FindIndex(Druck.Sprachen, s => s.Kuerzel == k.Sprache));
+            planArt.Index = k.Tagesplan ? 0 : 1;
+            PlanArtAnzeigen();
             dtStart.Wert = k.Start > new DateTime(2000, 1, 1) ? k.Start : DateTime.Today;
             dtEnde.Wert = k.Ende > new DateTime(2000, 1, 1) ? k.Ende : DateTime.Today.AddDays(1);
             abloesung.Index = Math.Min(AbloesungListe.Length, Math.Max(1, k.AbloesungStunden)) - 1;
@@ -1095,6 +1174,7 @@ namespace ShiftDesk
                 Sprache = Druck.Sprachen[sprache.Index].Kuerzel,
                 Start = dtStart.Wert,
                 Ende = dtEnde.Wert,
+                Tagesplan = planArt.Index == 0,
                 AbloesungStunden = abloesung.Index + 1,
                 StuendlichVon = stuendlichVon.Index,
                 StuendlichBis = stuendlichBis.Index,
@@ -1186,6 +1266,14 @@ namespace ShiftDesk
             seite = 0;
             StatistikAnzeigen();
             StatusAktualisieren();
+        }
+
+        // Beim Tagesplan zählen Start und Ende nicht: ausblenden
+        void PlanArtAnzeigen()
+        {
+            bool mitDatum = planArt.Index == 1;
+            feldStart.Visible = feldEnde.Visible = mitDatum;
+            if (planKoerper != null) planKoerper.PerformLayout();
         }
 
         void DruckAngabenUebernehmen()
@@ -1427,7 +1515,7 @@ namespace ShiftDesk
             for (int r = 0; r < plan.Zeilen.Count; r++)
             {
                 var p = plan.Zeilen[r];
-                var werte = new List<object> { p.Grad, p.Name, p.Gruppe };
+                var werte = new List<object> { p.Grad, p.Name, Konfiguration.IstStv(p.Funktion) ? GegenteilKdt : p.Gruppe };
                 int total = 0, essen = 0;
                 for (int k = 0; k < plan.Cfg.Posten.Count; k++)
                 {
@@ -1438,7 +1526,7 @@ namespace ShiftDesk
                     werte.Add(c == 0 ? "–" : c.ToString());
                 }
                 for (int t = 0; t < plan.Stunden; t++)
-                    if (plan.Essen[r, t]) essen++;
+                    if (plan.Essen[r, t] || plan.EssenAbloesung[r, t]) essen++;
                 werte.Add(essen == 0 ? "–" : essen.ToString());
                 werte.Add(total);
                 g.Rows.Add(werte.ToArray());
@@ -1622,6 +1710,7 @@ namespace ShiftDesk
                 Einlesen().Speichern(pfad);
                 dateiPfad = pfad;   // erst nach erfolgreichem Speichern
                 Titel();
+                rueckmeldung.Zeigen("Gespeichert: " + Path.GetFileName(pfad), "circle-check", Theme.Erfolg);
             }
             catch (Exception ex)
             {

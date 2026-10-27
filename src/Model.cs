@@ -109,6 +109,18 @@ namespace ShiftDesk
             return Pflichtposten.Any(p => string.Equals(p, (name ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
+        // Wacht Kdt Stv: ruht immer dann, wenn der Wacht Kdt im Dienst ist (braucht keine eigene Gruppe)
+        public static bool IstStv(string funktion)
+        {
+            funktion = funktion ?? "";
+            return funktion.IndexOf("Kdt", StringComparison.OrdinalIgnoreCase) >= 0 && funktion.IndexOf("Stv", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool IstKdt(string funktion)
+        {
+            return (funktion ?? "").IndexOf("Kdt", StringComparison.OrdinalIgnoreCase) >= 0 && !IstStv(funktion);
+        }
+
         public void PflichtpostenErgaenzen()
         {
             for (int i = 0; i < Pflichtposten.Length; i++)
@@ -153,6 +165,7 @@ namespace ShiftDesk
         public string Sprache = "de";      // Sprache des Ausdrucks: de, fr, it, en
         public DateTime Start;
         public DateTime Ende;
+        public bool Tagesplan;             // ein Blatt von 00:00 bis 24:00 ohne Datum, gilt jeden Tag (Start und Ende zählen dann nicht)
         public int AbloesungStunden = 1;   // Posten wechseln alle X Stunden (ab Mitternacht gerechnet)
         public int StuendlichVon;          // in diesem Zeitfenster wird trotzdem jede Stunde abgelöst (von == bis: kein Fenster)
         public int StuendlichBis;
@@ -230,9 +243,23 @@ namespace ShiftDesk
             if (k.Einheit == null) k.Einheit = "";
             if (Druck.Sprachen.All(x => x.Kuerzel != k.Sprache)) k.Sprache = "de";
             if (k.Version < 2) k.AeltereVersionUebernehmen();
+            k.StvGruppenEntfernen();
             k.Version = AktuelleVersion;
             k.PflichtpostenErgaenzen();
             return k;
+        }
+
+        // Der Wacht Kdt Stv ruht immer im Gegenteil zum Wacht Kdt und braucht keine Gruppe: Gruppen, die nur
+        // noch von Stv-Personen benutzt werden, fallen weg
+        void StvGruppenEntfernen()
+        {
+            var weg = Gruppen.Where(g => Personen.Any(p => p.Gruppe == g.Name)
+                && Personen.Where(p => p.Gruppe == g.Name).All(p => IstStv(p.Funktion))).ToList();
+            foreach (var g in weg)
+            {
+                Gruppen.Remove(g);
+                foreach (var p in Personen.Where(p => p.Gruppe == g.Name)) p.Gruppe = "";
+            }
         }
 
         // Dateien von vor den frei definierbaren Funktionen und Graden umwandeln.
@@ -271,14 +298,13 @@ namespace ShiftDesk
             k.Funktionen = StandardFunktionen();
 
             k.Gruppen.Add(new Gruppe { Name = "Kdt", RuheVon = 3, RuheBis = 15 });
-            k.Gruppen.Add(new Gruppe { Name = "Kdt Stv", RuheVon = 15, RuheBis = 3 });
             k.Gruppen.Add(new Gruppe { Name = "Gruppe 1", RuheVon = 23, RuheBis = 7 });
             k.Gruppen.Add(new Gruppe { Name = "Gruppe 2", RuheVon = 7, RuheBis = 15 });
             k.Gruppen.Add(new Gruppe { Name = "Gruppe 3", RuheVon = 15, RuheBis = 23 });
 
             // erfundene Namen
             k.Personen.Add(new Person { Grad = "Wm", Name = "Meier", Funktion = "Wacht Kdt", Gruppe = "Kdt" });
-            k.Personen.Add(new Person { Grad = "Rekr", Name = "Keller", Funktion = "Wacht Kdt Stv", Gruppe = "Kdt Stv" });
+            k.Personen.Add(new Person { Grad = "Rekr", Name = "Keller", Funktion = "Wacht Kdt Stv" });
             string[][] gruppen =
             {
                 new[] { "Frei", "Huber", "Brunner", "Gerber", "Baumann" },

@@ -213,8 +213,8 @@ namespace ShiftDesk
             DateTime ende = plan.Start.AddHours(plan.Stunden);
 
             zeilen.Add(new Zeile(1, 26).Text(0, "Wachtablösungsliste", sTitel));
-            zeilen.Add(new Zeile(2).Text(0, (string.IsNullOrEmpty(cfg.Name) ? "" : cfg.Name + "   ·   ") +
-                plan.Start.ToString("ddd dd.MM.yyyy HH:00", De) + " – " + ende.ToString("ddd dd.MM.yyyy HH:00", De), sUntertitel));
+            zeilen.Add(new Zeile(2).Text(0, (string.IsNullOrEmpty(cfg.Name) ? "" : cfg.Name + "   ·   ") + (cfg.Tagesplan ? "Jeden Tag" :
+                plan.Start.ToString("ddd dd.MM.yyyy HH:00", De) + " – " + ende.ToString("ddd dd.MM.yyyy HH:00", De)), sUntertitel));
 
             // Tage (verbunden über ihre Stunden) und Stunden
             var tage = new Zeile(4, 20);
@@ -224,7 +224,7 @@ namespace ShiftDesk
                 if (t != 0 && z.Hour != 0) continue;
                 int bis = t;
                 while (bis + 1 < plan.Stunden && plan.Start.AddHours(bis + 1).Hour != 0) bis++;
-                tage.Text(ErsteStundenSpalte + t, z.ToString("dddd, dd.MM.yyyy", De), sTag);
+                tage.Text(ErsteStundenSpalte + t, cfg.Tagesplan ? "Jeden Tag" : z.ToString("dddd, dd.MM.yyyy", De), sTag);
                 if (bis > t) verbunden.Add(Spalte(ErsteStundenSpalte + t) + "4:" + Spalte(ErsteStundenSpalte + bis) + "4");
             }
             zeilen.Add(tage);
@@ -247,7 +247,7 @@ namespace ShiftDesk
                     if (k == Plan.RUHE && plan.Essen[r, t]) z.Text(ErsteStundenSpalte + t, "🍴", sRuhe);
                     else if (k == Plan.RUHE) z.Leer(ErsteStundenSpalte + t, sRuhe);
                     else if (k < 0) z.Leer(ErsteStundenSpalte + t, sFrei);
-                    else z.Text(ErsteStundenSpalte + t, cfg.Posten[k].Name + (plan.Essen[r, t] ? " 🍴" : ""), sErsterPosten + k);
+                    else z.Text(ErsteStundenSpalte + t, cfg.Posten[k].Name + (plan.Essen[r, t] ? " 🍴" : plan.EssenAbloesung[r, t] ? " 🍴*" : ""), sErsterPosten + k);
                 }
                 zeilen.Add(z);
             }
@@ -262,6 +262,7 @@ namespace ShiftDesk
                 verbunden.Add(Spalte(spalte) + (nr - 1) + ":" + Spalte(spalte + 2) + (nr - 1));
             }
             if (cfg.Essenszeiten.Count > 0) { legende.Text(spalte, "🍴 = Essen", sNormal); spalte += 3; }
+            if (plan.EssenAbloesung.Cast<bool>().Any(x => x)) { legende.Text(spalte, "🍴* = Essen, Reserve löst ab", sNormal); spalte += 3; }
             if (cfg.Posten.Any(p => p.Draussen)) { legende.Text(spalte, "❄ = Draussen", sNormal); spalte += 3; }
             if (plan.Zeilen.Any(p => p.Fahrer)) legende.Text(spalte, "🚗 = Fahrer", sNormal);
             zeilen.Add(legende);
@@ -300,7 +301,7 @@ namespace ShiftDesk
                     total += c;
                     z.Zahl(3 + k, c, sZahl);
                 }
-                for (int t = 0; t < plan.Stunden; t++) if (plan.Essen[r, t]) essen++;
+                for (int t = 0; t < plan.Stunden; t++) if (plan.Essen[r, t] || plan.EssenAbloesung[r, t]) essen++;
                 z.Zahl(3 + cfg.Posten.Count, essen, sZahl).Zahl(4 + cfg.Posten.Count, total, sZahl);
                 zeilen.Add(z);
             }

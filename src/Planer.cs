@@ -18,6 +18,7 @@ namespace ShiftDesk
         public int[] Team;        // Zeilen mit gleicher Nummer bilden ein festes Team und sind immer zusammen eingeteilt
         public int[,] Z;          // [Zeile, Stunde] -> Postenindex, FREI oder RUHE
         public bool[,] Essen;     // [Zeile, Stunde] -> isst in dieser Stunde
+        public bool[,] EssenAbloesung;   // [Zeile, Stunde] -> isst, eine Reserve löst kurz ab (kein Posten mit Essen frei)
         public List<Person> NichtEingeteilt = new List<Person>();
         public List<string> Warnungen = new List<string>();
 
@@ -40,6 +41,7 @@ namespace ShiftDesk
         readonly long[] gegessen;   // Schlüssel des Essensfensters, in dem Zeile r zuletzt gegessen hat
         readonly bool[] kannEssen;  // Funktion darf auf mindestens einen Posten mit Essen
         Gruppe[] gruppe;
+        bool[] gegenteil;   // Wacht Kdt Stv: ruht, wenn die Gruppe (die des Wacht Kdt) im Dienst ist
 
         // Essensfenster der aktuellen Stunde
         bool essenAktiv;
@@ -65,6 +67,12 @@ namespace ShiftDesk
             plan.Start = AufStundeRunden(cfg.Start);
             DateTime ende = AufStundeRunden(cfg.Ende);
             if (cfg.Ende > ende) ende = ende.AddHours(1);   // angebrochene Stunde mitnehmen
+            if (cfg.Tagesplan)
+            {
+                // ein Tag von 00:00 bis 24:00; das Datum erscheint nirgends
+                plan.Start = DateTime.Today;
+                ende = plan.Start.AddDays(1);
+            }
             plan.Stunden = (int)Math.Round((ende - plan.Start).TotalHours);
             if (plan.Stunden <= 0)
                 throw new Exception("Das Ende muss nach dem Start liegen.");
@@ -111,6 +119,7 @@ namespace ShiftDesk
 
             plan.Z = new int[plan.Zeilen.Count, plan.Stunden];
             plan.Essen = new bool[plan.Zeilen.Count, plan.Stunden];
+            plan.EssenAbloesung = new bool[plan.Zeilen.Count, plan.Stunden];
 
             new Planer(cfg, plan, seed).Rechnen();
             return plan;
@@ -125,12 +134,25 @@ namespace ShiftDesk
         {
             int n = plan.Zeilen.Count;
             gruppe = new Gruppe[n];
+            gegenteil = new bool[n];
+            var kdtGruppe = plan.Zeilen.Where(p => Konfiguration.IstKdt(p.Funktion))
+                .Select(p => cfg.Gruppen.FirstOrDefault(g => g.Name == p.Gruppe)).FirstOrDefault(g => g != null);
             for (int r = 0; r < n; r++)
             {
                 var p = plan.Zeilen[r];
-                gruppe[r] = cfg.Gruppen.FirstOrDefault(g => g.Name == p.Gruppe);
-                if (gruppe[r] == null)
-                    plan.Warnungen.Add(Name(r) + ": keine gültige Gruppe, ist darum nie in Ruhe.");
+                if (Konfiguration.IstStv(p.Funktion))
+                {
+                    gruppe[r] = kdtGruppe;
+                    gegenteil[r] = true;
+                    if (kdtGruppe == null || kdtGruppe.RuheVon == kdtGruppe.RuheBis)
+                        plan.Warnungen.Add(Name(r) + ": ruht im Gegenteil zum Wacht Kdt, aber der Wacht Kdt hat keine Ruhezeit; ist darum nie in Ruhe.");
+                }
+                else
+                {
+                    gruppe[r] = cfg.Gruppen.FirstOrDefault(g => g.Name == p.Gruppe);
+                    if (gruppe[r] == null)
+                        plan.Warnungen.Add(Name(r) + ": keine gültige Gruppe, ist darum nie in Ruhe.");
+                }
                 if (!cfg.Funktionen.Any(f => f.Name == p.Funktion))
                     plan.Warnungen.Add(Name(r) + ": unbekannte Funktion «" + p.Funktion + "».");
                 else if (!cfg.Posten.Any(k => Konfiguration.Darf(p, k)))
@@ -152,6 +174,7 @@ namespace ShiftDesk
 
             var unterbesetzt = new Dictionary<int, List<int>>();   // Posten -> Stunden
             var ohneFahrer = new Dictionary<int, List<int>>();     // Fahrerposten -> Stunden ohne Fahrer
+            var abloesungen = new int[plan.Stunden];               // wie viele in dieser Stunde für das Essen abgelöst werden
 
             for (int t = 0; t < plan.Stunden; t++)
             {
@@ -159,7 +182,7 @@ namespace ShiftDesk
                 int h = zeit.Hour;
 
                 for (int r = 0; r < n; r++)
-                    plan.Z[r, t] = gruppe[r] != null && gruppe[r].RuhtUm(h) ? Plan.RUHE : Plan.FREI;
+                    plan.Z[r, t] = Ruht(r, h) ? Plan.RUHE : Plan.FREI;
 
                 EssensfensterBestimmen(zeit);
 
@@ -176,13 +199,32 @@ namespace ShiftDesk
                             plan.Essen[r, t] = true;
                             gegessen[r] = essenSchluessel;
                         }
-                    // Wer keine Essensstunde bekommt, gibt keinen Hinweis: die Wache löst dann vor Ort kurz ab
                     foreach (int r in zeilen.Where(r => kannEssen[r] && BrauchtEssen(r, t)))
                     {
                         int k = plan.Z[r, t];
                         if (k >= 0 && cfg.Posten[k].EssenMoeglich && gegessen[r] != essenSchluessel)
                         {
                             plan.Essen[r, t] = true;
+                            gegessen[r] = essenSchluessel;
+                        }
+                    }
+                    // Wer das ganze Fenster im Dienst ist und auf keinem Posten mit Essen war, isst trotzdem: eine Reserve
+                    // löst kurz ab (im Plan oranges Besteck). In der Stunde mit den wenigsten solchen Ablösungen.
+                    // Fahrer essen in der Ruhezeit; Wacht Kdt und Stv werden zum Essen nicht abgelöst.
+                    if (essenRestStunden == 1 && essenBeginn >= plan.Start)
+                    {
+                        int von = (int)Math.Round((essenBeginn - plan.Start).TotalHours);
+                        for (int r = 0; r < n; r++)
+                        {
+                            var person = plan.Zeilen[r];
+                            if (person.Fahrer || Konfiguration.IstKdt(person.Funktion) || Konfiguration.IstStv(person.Funktion)
+                                || gegessen[r] == essenSchluessel || !BrauchtEssen(r, t)) continue;
+                            int beste = -1;
+                            for (int s = von; s <= t; s++)
+                                if (plan.Z[r, s] >= 0 && (beste < 0 || abloesungen[s] < abloesungen[beste])) beste = s;
+                            if (beste < 0) continue;
+                            plan.EssenAbloesung[r, beste] = true;
+                            abloesungen[beste]++;
                             gegessen[r] = essenSchluessel;
                         }
                     }
@@ -193,13 +235,13 @@ namespace ShiftDesk
 
             foreach (var e in unterbesetzt.OrderByDescending(e => e.Key))
             {
-                var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
+                var zeiten = e.Value.Take(8).Select(t => Zeitpunkt(t));
                 plan.Warnungen.Insert(0, "Posten «" + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
                     " Stunde(n) nicht voll besetzt: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
             }
             foreach (var e in ohneFahrer.OrderByDescending(e => e.Key))
             {
-                var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
+                var zeiten = e.Value.Take(8).Select(t => Zeitpunkt(t));
                 plan.Warnungen.Insert(0, "Posten «" + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
                     " Stunde(n) ohne Fahrer: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
             }
@@ -234,7 +276,7 @@ namespace ShiftDesk
                     while (ende + 1 < plan.Stunden && Draussen(r, ende + 1)) ende++;
                     int dauer = ende - t + 1;
                     if (dauer > max)
-                        faelle.Add(dauer + " Std. ab " + plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
+                        faelle.Add(dauer + " Std. ab " + Zeitpunkt(t));
                     t = ende;
                 }
                 if (faelle.Count > 0)
@@ -432,9 +474,8 @@ namespace ShiftDesk
         // Wer im Essensfenster Ruhezeit hat, isst in der Ruhezeit; eingeplant werden nur die, die das ganze Fenster im Dienst sind
         bool BrauchtEssen(int r, int t)
         {
-            if (gruppe[r] == null) return true;
             for (DateTime z = essenBeginn; z < essenEnde; z = z.AddHours(1))
-                if (gruppe[r].RuhtUm(z.Hour)) return false;
+                if (Ruht(r, z.Hour)) return false;
             return true;
         }
 
@@ -446,9 +487,23 @@ namespace ShiftDesk
             {
                 DateTime z = plan.Start.AddHours(s);
                 if (z >= essenEnde) break;
-                if (gruppe[r] == null || !gruppe[r].RuhtUm(z.Hour)) chancen++;
+                if (!Ruht(r, z.Hour)) chancen++;
             }
             return chancen;
+        }
+
+        // Ruht Zeile r um diese Stunde? Der Stv ruht genau dann, wenn der Wacht Kdt im Dienst ist.
+        bool Ruht(int r, int stunde)
+        {
+            var g = gruppe[r];
+            if (g == null || g.RuheVon == g.RuheBis) return false;
+            return gegenteil[r] ? !g.RuhtUm(stunde) : g.RuhtUm(stunde);
+        }
+
+        // Zeitpunkt für Hinweise; beim Tagesplan nur die Uhrzeit (er gilt jeden Tag)
+        string Zeitpunkt(int t)
+        {
+            return plan.Start.AddHours(t).ToString(cfg.Tagesplan ? "HH:00" : "ddd dd.MM. HH:00", De);
         }
 
         string Name(int r)

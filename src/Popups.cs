@@ -277,13 +277,6 @@ namespace ShiftDesk
                 y += hoehen[i] + abstand;
             }
             g.ResetClip();
-            // Bildlaufleiste wie überall, wenn nicht alles Platz hat (blättern mit dem Mausrad)
-            if (inhaltH > sichtbarH)
-            {
-                float h = Math.Max(Theme.S(28), liste.Height * (float)sichtbarH / inhaltH);
-                float top = (liste.Height - h) * versatz / (inhaltH - sichtbarH);
-                Bildlaufleiste.Zeichnen(g, new RectangleF(Width - Theme.S(12), liste.Top, Bildlaufleiste.Dicke, liste.Height), top, h, false, false);
-            }
             Popup.Rand(g, Size);
         }
     }

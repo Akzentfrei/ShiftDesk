@@ -14,26 +14,26 @@ namespace ShiftDesk
         public string Kuerzel, Name;
         public CultureInfo Kultur;
         public string DatumLang;
-        public string Titel, Einheit, Fuer, Datum, Legende, Zeit, Wer;
-        public string Zeichen, Ruhezeit, OhnePosten, EssenVor, EssenNach, EssenRuhe, Draussen, Fahrer, NichtEingeteilt, Erstellt, Seite;
+        public string Titel, Einheit, Fuer, Datum, JedenTag, Legende, Zeit, Wer;
+        public string Zeichen, Ruhezeit, OhnePosten, EssenVor, EssenNach, EssenRuhe, EssenReserve, Draussen, Fahrer, NichtEingeteilt, Erstellt, Seite;
 
         public static readonly Druck[] Sprachen =
         {
             new Druck { Kuerzel = "de", Name = "Deutsch", Kultur = new CultureInfo("de-CH"), DatumLang = "dddd, dd.MM.yyyy",
-                Titel = "Ablösungsliste", Einheit = "Einheit", Fuer = "Für", Datum = "Datum", Legende = "Legende", Zeit = "Zeit", Wer = "Wer",
-                Zeichen = "Zeichen", Ruhezeit = "Ruhezeit", OhnePosten = "ohne Posten", EssenVor = "Essen vor der Ablösung", EssenNach = "Essen nach der Ablösung", EssenRuhe = "Essen in der Ruhezeit", Draussen = "Draussen", Fahrer = "Fahrer",
+                Titel = "Ablösungsliste", Einheit = "Einheit", Fuer = "Für", Datum = "Datum", JedenTag = "Jeden Tag", Legende = "Legende", Zeit = "Zeit", Wer = "Wer",
+                Zeichen = "Zeichen", Ruhezeit = "Ruhezeit", OhnePosten = "ohne Posten", EssenVor = "Essen vor der Ablösung", EssenNach = "Essen nach der Ablösung", EssenRuhe = "Essen in der Ruhezeit", EssenReserve = "Essen, Reserve löst ab", Draussen = "Draussen", Fahrer = "Fahrer",
                 NichtEingeteilt = "Nicht eingeteilt", Erstellt = "Erstellt mit ShiftDesk am {0}", Seite = "Seite {0} von {1}" },
             new Druck { Kuerzel = "fr", Name = "Français", Kultur = new CultureInfo("fr-CH"), DatumLang = "dddd dd.MM.yyyy",
-                Titel = "Liste de relève", Einheit = "Unité", Fuer = "Pour", Datum = "Date", Legende = "Légende", Zeit = "Heure", Wer = "Qui",
-                Zeichen = "Signes", Ruhezeit = "Repos", OhnePosten = "sans poste", EssenVor = "Repas avant la relève", EssenNach = "Repas après la relève", EssenRuhe = "Repas pendant le repos", Draussen = "À l'extérieur", Fahrer = "Chauffeur",
+                Titel = "Liste de relève", Einheit = "Unité", Fuer = "Pour", Datum = "Date", JedenTag = "Chaque jour", Legende = "Légende", Zeit = "Heure", Wer = "Qui",
+                Zeichen = "Signes", Ruhezeit = "Repos", OhnePosten = "sans poste", EssenVor = "Repas avant la relève", EssenNach = "Repas après la relève", EssenRuhe = "Repas pendant le repos", EssenReserve = "Repas, la réserve relève", Draussen = "À l'extérieur", Fahrer = "Chauffeur",
                 NichtEingeteilt = "Non engagés", Erstellt = "Créé avec ShiftDesk le {0}", Seite = "Page {0} sur {1}" },
             new Druck { Kuerzel = "it", Name = "Italiano", Kultur = new CultureInfo("it-CH"), DatumLang = "dddd dd.MM.yyyy",
-                Titel = "Lista dei turni", Einheit = "Unità", Fuer = "Per", Datum = "Data", Legende = "Legenda", Zeit = "Ora", Wer = "Chi",
-                Zeichen = "Simboli", Ruhezeit = "Riposo", OhnePosten = "senza posto", EssenVor = "Pasto prima del cambio", EssenNach = "Pasto dopo il cambio", EssenRuhe = "Pasto durante il riposo", Draussen = "All'esterno", Fahrer = "Autista",
+                Titel = "Lista dei turni", Einheit = "Unità", Fuer = "Per", Datum = "Data", JedenTag = "Ogni giorno", Legende = "Legenda", Zeit = "Ora", Wer = "Chi",
+                Zeichen = "Simboli", Ruhezeit = "Riposo", OhnePosten = "senza posto", EssenVor = "Pasto prima del cambio", EssenNach = "Pasto dopo il cambio", EssenRuhe = "Pasto durante il riposo", EssenReserve = "Pasto, la riserva dà il cambio", Draussen = "All'esterno", Fahrer = "Autista",
                 NichtEingeteilt = "Non impiegati", Erstellt = "Creato con ShiftDesk il {0}", Seite = "Pagina {0} di {1}" },
             new Druck { Kuerzel = "en", Name = "English", Kultur = new CultureInfo("en-GB"), DatumLang = "dddd, dd.MM.yyyy",
-                Titel = "Relief Roster", Einheit = "Unit", Fuer = "For", Datum = "Date", Legende = "Legend", Zeit = "Time", Wer = "Who",
-                Zeichen = "Symbols", Ruhezeit = "Rest", OhnePosten = "no post", EssenVor = "Meal before relief", EssenNach = "Meal after relief", EssenRuhe = "Meal during rest", Draussen = "Outdoors", Fahrer = "Driver",
+                Titel = "Relief Roster", Einheit = "Unit", Fuer = "For", Datum = "Date", JedenTag = "Every day", Legende = "Legend", Zeit = "Time", Wer = "Who",
+                Zeichen = "Symbols", Ruhezeit = "Rest", OhnePosten = "no post", EssenVor = "Meal before relief", EssenNach = "Meal after relief", EssenRuhe = "Meal during rest", EssenReserve = "Meal, reserve relieves", Draussen = "Outdoors", Fahrer = "Driver",
                 NichtEingeteilt = "Not assigned", Erstellt = "Created with ShiftDesk on {0}", Seite = "Page {0} of {1}" },
         };
 
@@ -57,6 +57,7 @@ namespace ShiftDesk
         static readonly Color Gitter = Color.FromArgb(200, 200, 200);
         static readonly Color Leer = Color.FromArgb(243, 244, 246);
         static readonly Color Schnee = Color.FromArgb(37, 99, 235);
+        static readonly Color Orange = Color.FromArgb(234, 88, 12);
 
         // Textausrichtungen, einmal erzeugt und für jede Seite wiederverwendet
         static readonly StringFormat links = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
@@ -111,21 +112,28 @@ namespace ShiftDesk
                 float feldW = b.Right - fx0;
 
                 float feldH = 22 * u;
-                string datum = von.Hour == 0 && stunden == 24
-                    ? von.ToString(t.DatumLang, t.Kultur)
+                string datum = cfg.Tagesplan ? t.JedenTag
+                    : von.Hour == 0 && stunden == 24 ? von.ToString(t.DatumLang, t.Kultur)
                     : von.ToString("ddd dd.MM.yyyy HH:00", t.Kultur) + " – " + bis.ToString("ddd dd.MM.yyyy HH:00", t.Kultur);
                 var felder = new[]
                 {
-                    new { Name = t.Einheit, Wert = cfg.Einheit ?? "", X = 0f, W = 0.28f },
-                    new { Name = t.Fuer, Wert = cfg.Name ?? "", X = 0.28f, W = 0.32f },
-                    new { Name = t.Datum, Wert = datum, X = 0.60f, W = 0.40f },
+                    new { Name = t.Einheit, Wert = cfg.Einheit ?? "", X = 0f, W = 0.24f },
+                    new { Name = t.Fuer, Wert = cfg.Name ?? "", X = 0.24f, W = 0.41f },
+                    new { Name = t.Datum, Wert = datum, X = 0.65f, W = 0.35f },
                 };
                 float labelW = felder.Max(f => g.MeasureString(f.Name, fFeld).Width) + 8 * u;
                 foreach (var f in felder)
                 {
                     float fx = fx0 + f.X * feldW;
                     g.DrawString(f.Name, fFeld, tText, new RectangleF(fx, oben, labelW, feldH), links);
-                    g.DrawString(f.Wert, fWert, tText, new RectangleF(fx + labelW, oben, f.W * feldW - labelW - 4 * u, feldH), links);
+                    // lange Werte (z. B. der Name des Plans) werden kleiner geschrieben statt abgeschnitten
+                    var wertFeld = new RectangleF(fx + labelW, oben, f.W * feldW - labelW - 4 * u, feldH);
+                    float breite = g.MeasureString(f.Wert, fWert).Width;
+                    if (breite <= wertFeld.Width || f.Wert == "")
+                        g.DrawString(f.Wert, fWert, tText, wertFeld, links);
+                    else
+                        using (var klein = new Font(Schrift, Math.Max(6.5f * u, fWert.Size * wertFeld.Width / breite), GraphicsUnit.World))
+                            g.DrawString(f.Wert, klein, tText, wertFeld, links);
                 }
                 g.DrawLine(duenn, fx0, oben + feldH, b.Right, oben + feldH);
 
@@ -144,7 +152,7 @@ namespace ShiftDesk
                     float x = lx0 + (k / lZeilen) * lSpalteW, y = ly + (k % lZeilen) * lZeileH;
                     var feld = new RectangleF(x, y + (lZeileH - q) / 2, q, q);
                     using (var f = new SolidBrush(Pastell(posten.Farbe))) g.FillRectangle(f, feld);
-                    g.DrawString(Kuerzel(k), fKleinFett, tText, feld, mitte);
+                    Mittig(g, Kuerzel(k), fKleinFett, tText, feld);
                     float tx = x + q + 4 * u, rest = lSpalteW - q - 8 * u;
                     float w = Math.Min(rest, g.MeasureString(posten.Name, fFeld).Width);
                     g.DrawString(posten.Name, fFeld, tText, new RectangleF(tx, y, w + 2 * u, lZeileH), links);
@@ -180,7 +188,7 @@ namespace ShiftDesk
                 g.DrawLine(duenn, b.Left, tabOben, xs, kopfY);
                 g.DrawString(t.Zeit, fKopf, tText, new RectangleF(b.Left, tabOben + 2 * u, xs - b.Left - 5 * u, 14 * u), rechtsMitte);
                 g.DrawString(t.Wer, fKopf, tText, new RectangleF(b.Left + 4 * u, kopfY - 15 * u, gradW + nameW, 14 * u), links);
-                bool essenVorDa = false, essenNachDa = false, essenRuheDa = false;
+                bool essenVorDa = false, essenNachDa = false, essenRuheDa = false, essenReserveDa = false;
                 using (var fName = new Font(Schrift, Math.Min(9.5f * u, zeileH * 0.44f), FontStyle.Bold, GraphicsUnit.World))
                 using (var fGrad = new Font(Schrift, Math.Min(9.5f * u, zeileH * 0.44f), GraphicsUnit.World))
                 using (var fZeichen = new Font(Schrift, Math.Min(Math.Min(11 * u, zeileH * 0.46f), spalteW * 0.42f), FontStyle.Bold, GraphicsUnit.World))
@@ -216,11 +224,21 @@ namespace ShiftDesk
 
                         // Essen als Zeichen in der Ecke eines Postenfelds: oben links = vor der Ablösung essen,
                         // oben rechts = nach der Ablösung; mitten in der Ruhezeit gross in der Stunde
+                        // Orange: auf keinem Posten mit Essen, eine Reserve löst zum Essen ab
                         var essenLinks = new List<RectangleF>();
                         var essenRechts = new List<RectangleF>();
+                        var reserveLinks = new List<RectangleF>();
+                        var reserveRechts = new List<RectangleF>();
                         var essenMitte = new bool[stunden];
                         for (int c = 0; c < stunden; c++)
                         {
+                            if (plan.EssenAbloesung[r, erste + c] && posten(c))
+                            {
+                                if (c - feldA[c] < feldE[c] - c) reserveLinks.Add(feldVon(c));
+                                else reserveRechts.Add(feldVon(c));
+                                essenReserveDa = true;
+                                continue;
+                            }
                             if (!plan.Essen[r, erste + c]) continue;
                             if (posten(c))
                             {
@@ -246,10 +264,10 @@ namespace ShiftDesk
                                 var platz = feld;
                                 if (feld.Width < spalteW * 1.5f)
                                 {
-                                    if (essenLinks.Contains(feld)) platz = RectangleF.FromLTRB(platz.Left + es * 0.55f, platz.Top, platz.Right, platz.Bottom);
-                                    if (essenRechts.Contains(feld)) platz = RectangleF.FromLTRB(platz.Left, platz.Top, platz.Right - es * 0.55f, platz.Bottom);
+                                    if (essenLinks.Contains(feld) || reserveLinks.Contains(feld)) platz = RectangleF.FromLTRB(platz.Left + es * 0.55f, platz.Top, platz.Right, platz.Bottom);
+                                    if (essenRechts.Contains(feld) || reserveRechts.Contains(feld)) platz = RectangleF.FromLTRB(platz.Left, platz.Top, platz.Right - es * 0.55f, platz.Bottom);
                                 }
-                                g.DrawString(Kuerzel(k), fZeichen, tText, platz, mitte);
+                                Mittig(g, Kuerzel(k), fZeichen, tText, platz);
                             }
                             else if (essenMitte[c0])
                                 EssenSymbol(g, RectangleF.Inflate(feld, -zeileH * 0.06f, -zeileH * 0.06f));
@@ -263,6 +281,10 @@ namespace ShiftDesk
                             EssenSymbol(g, new RectangleF(feld.Left + 1 * u, feld.Top + 1 * u, es, es));
                         foreach (var feld in essenRechts)
                             EssenSymbol(g, new RectangleF(feld.Right - es - 1 * u, feld.Top + 1 * u, es, es));
+                        foreach (var feld in reserveLinks)
+                            EssenSymbol(g, new RectangleF(feld.Left + 1 * u, feld.Top + 1 * u, es, es), true);
+                        foreach (var feld in reserveRechts)
+                            EssenSymbol(g, new RectangleF(feld.Right - es - 1 * u, feld.Top + 1 * u, es, es), true);
                     }
                 }
 
@@ -323,14 +345,14 @@ namespace ShiftDesk
                     zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.EssenVor, feld =>
                     {
                         muster(feld, musterFarbe, "");
-                        g.DrawString(musterZeichen, fKleinFett, tText, RectangleF.FromLTRB(feld.Left + ms * 0.6f, feld.Top, feld.Right, feld.Bottom), mitte);
+                        Mittig(g, musterZeichen, fKleinFett, tText, RectangleF.FromLTRB(feld.Left + ms * 0.6f, feld.Top, feld.Right, feld.Bottom));
                         EssenSymbol(g, new RectangleF(feld.Left + 0.6f * u, feld.Top + 0.6f * u, ms, ms));
                     }));
                 if (essenNachDa)
                     zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.EssenNach, feld =>
                     {
                         muster(feld, musterFarbe, "");
-                        g.DrawString(musterZeichen, fKleinFett, tText, RectangleF.FromLTRB(feld.Left, feld.Top, feld.Right - ms * 0.6f, feld.Bottom), mitte);
+                        Mittig(g, musterZeichen, fKleinFett, tText, RectangleF.FromLTRB(feld.Left, feld.Top, feld.Right - ms * 0.6f, feld.Bottom));
                         EssenSymbol(g, new RectangleF(feld.Right - ms - 0.6f * u, feld.Top + 0.6f * u, ms, ms));
                     }));
                 if (essenRuheDa)
@@ -338,6 +360,13 @@ namespace ShiftDesk
                     {
                         muster(feld, Leer, "");
                         EssenSymbol(g, RectangleF.Inflate(feld, -0.5f * u, -0.5f * u));
+                    }));
+                if (essenReserveDa)
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.EssenReserve, feld =>
+                    {
+                        muster(feld, musterFarbe, "");
+                        Mittig(g, musterZeichen, fKleinFett, tText, RectangleF.FromLTRB(feld.Left, feld.Top, feld.Right - ms * 0.6f, feld.Bottom));
+                        EssenSymbol(g, new RectangleF(feld.Right - ms - 0.6f * u, feld.Top + 0.6f * u, ms, ms), true);
                     }));
                 if (cfg.Posten.Any(p => p.Draussen))
                     zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Draussen, feld =>
@@ -417,13 +446,32 @@ namespace ShiftDesk
             Lucide.Zeichne(g, "snowflake", feld, Schnee, 2.4f);
         }
 
-        // Lucide-Besteck auf weissem Kreis
-        static void EssenSymbol(Graphics g, RectangleF zelle)
+        // Lucide-Besteck auf weissem Kreis; reserve = oranger Kreis mit weissem Besteck (eine Reserve löst zum Essen ab)
+        static void EssenSymbol(Graphics g, RectangleF zelle, bool reserve = false)
         {
             float s = Math.Min(zelle.Width, zelle.Height) * 0.78f;
             var kreis = new RectangleF(zelle.X + (zelle.Width - s) / 2, zelle.Y + (zelle.Height - s) / 2, s, s);
-            g.FillEllipse(Brushes.White, kreis);
-            Lucide.Zeichne(g, "utensils", RectangleF.Inflate(kreis, -s * 0.21f, -s * 0.21f), TextFarbe, 2.4f);
+            using (var f = new SolidBrush(reserve ? Orange : Color.White))
+                g.FillEllipse(f, kreis);
+            Lucide.Zeichne(g, "utensils", RectangleF.Inflate(kreis, -s * 0.21f, -s * 0.21f), reserve ? Color.White : TextFarbe, 2.4f);
+        }
+
+        // Text genau in die Mitte des Felds, nach dem sichtbaren Umriss der Zeichen (DrawString rückt
+        // wegen der Schrift-Innenabstände etwas zur Seite)
+        static void Mittig(Graphics g, string text, Font schrift, Brush pinsel, RectangleF feld)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            using (var pfad = new GraphicsPath())
+            {
+                pfad.AddString(text, schrift.FontFamily, (int)schrift.Style, schrift.Size, PointF.Empty, StringFormat.GenericTypographic);
+                var umriss = pfad.GetBounds();
+                using (var m = new Matrix())
+                {
+                    m.Translate(feld.X + (feld.Width - umriss.Width) / 2 - umriss.X, feld.Y + (feld.Height - umriss.Height) / 2 - umriss.Y);
+                    pfad.Transform(m);
+                }
+                g.FillPath(pinsel, pfad);
+            }
         }
     }
 }

@@ -289,19 +289,47 @@ namespace ShiftDesk
             }
         }
 
+        // Fertig gezeichnetes Bild des Eintrags: beim Ein-/Ausfahren der Seitenleiste wird nur noch kopiert
+        Bitmap bild;
+        string bildSchluessel;
+
         protected override void OnPaint(PaintEventArgs e)
         {
-            var g = e.Graphics;
+            string schluessel = Width + "|" + Height + "|" + aktiv + "|" + Hover + "|" + schmal + "|" + Text + "|" + Icon + "|"
+                + Untergrund.ToArgb() + "|" + Theme.Text.ToArgb() + "|" + Theme.Auswahl.ToArgb();
+            if (bild == null || schluessel != bildSchluessel)
+            {
+                if (bild != null) bild.Dispose();
+                bild = new Bitmap(Math.Max(1, Width), Math.Max(1, Height), System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using (var g = Graphics.FromImage(bild))
+                {
+                    g.Clear(Untergrund);
+                    Zeichnen(g);
+                }
+                bildSchluessel = schluessel;
+            }
+            e.Graphics.DrawImageUnscaled(bild, 0, 0);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && bild != null) bild.Dispose();
+            base.Dispose(disposing);
+        }
+
+        void Zeichnen(Graphics g)
+        {
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0, Theme.S(2), Width, Height - Theme.S(4));
             if (aktiv) Formen.Fuellen(g, r, Theme.RadiusFeld, Theme.Auswahl);
             else if (Hover) Formen.Fuellen(g, r, Theme.RadiusFeld, Theme.Hover);
+            // Symbol immer an derselben Stelle (mittig in der schmalen Leiste), damit beim Ein-/Ausklappen nichts springt
             int icon = Theme.S(18);
-            float x = schmal ? (Width - icon) / 2f : Theme.S(12);
+            float x = Theme.S(16);
             Lucide.Zeichne(g, Icon, new RectangleF(x, (Height - icon) / 2f, icon, icon), aktiv ? Theme.Akzent : Theme.Gedaempft);
             if (schmal) return;
             TextRenderer.DrawText(g, Text, aktiv ? Schrift.Ueberschrift : Font,
-                new Rectangle(Theme.S(42), 0, Width - Theme.S(46), Height), aktiv ? Theme.Akzent : Theme.Text,
+                new Rectangle(Theme.S(44), 0, Width - Theme.S(48), Height), aktiv ? Theme.Akzent : Theme.Text,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
@@ -321,8 +349,9 @@ namespace ShiftDesk
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            if (Schmal) return;   // eingeklappt steht hier der Knopf zum Ausklappen
             int kachel = Theme.S(40), y = (Height - kachel) / 2;
-            var r = new RectangleF(Schmal ? (Width - kachel) / 2 : Theme.S(4), y, kachel, kachel);
+            var r = new RectangleF(Theme.S(5), y, kachel, kachel);   // immer an derselben Stelle
             var logo = Bilder.Laden("logo.png");
             if (logo != null)
                 g.DrawImage(logo, r);
@@ -335,6 +364,58 @@ namespace ShiftDesk
             int x = (int)r.Right + Theme.S(14);
             TextRenderer.DrawText(g, "ShiftDesk", Schrift.Titel, new Point(x, y - Theme.S(3)), Theme.Text, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, "Ablöseplanung", Schrift.Klein, new Point(x, y + Theme.S(21)), Theme.Gedaempft, TextFormatFlags.NoPadding);
+        }
+    }
+
+    // Kurze Rückmeldung unten im Fenster (z. B. «Gespeichert»); verschwindet nach ein paar Sekunden von selbst
+    public class Rueckmeldung : ThemaControl
+    {
+        readonly Timer timer = new Timer { Interval = 2600 };
+        string icon = "circle-check";
+        Color farbe = Color.Green;
+
+        public Rueckmeldung()
+        {
+            Visible = false;
+            Font = Schrift.Fett;
+            Height = Theme.S(42);
+            timer.Tick += (s, e) => { timer.Stop(); Visible = false; };
+        }
+
+        public void Zeigen(string text, string icon, Color farbe)
+        {
+            Text = text;
+            this.icon = icon;
+            this.farbe = farbe;
+            if (Parent == null) return;
+            int breite = Math.Min(Parent.ClientSize.Width - Theme.S(40), Theme.S(16 + 18 + 10 + 18) + TextRenderer.MeasureText(text, Font).Width);
+            Bounds = new Rectangle((Parent.ClientSize.Width - breite) / 2, Parent.ClientSize.Height - Height - Theme.S(28), breite, Height);
+            using (var pfad = Formen.Rund(new RectangleF(0, 0, Width, Height), Theme.S(10)))
+                Region = new Region(pfad);
+            Visible = true;
+            BringToFront();
+            Invalidate();
+            timer.Stop();
+            timer.Start();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+            Formen.Fuellen(g, r, Theme.S(10), Theme.Karte);
+            Formen.Umrandung(g, r, Theme.S(10), Theme.Rand);
+            float s = Theme.S(18);
+            Lucide.Zeichne(g, icon, new RectangleF(Theme.S(16), (Height - s) / 2, s, s), farbe);
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(Theme.S(16 + 18 + 10), 0, Width - Theme.S(16 + 18 + 10 + 12), Height), Theme.Text,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) timer.Dispose();
+            base.Dispose(disposing);
         }
     }
 
@@ -779,145 +860,18 @@ namespace ShiftDesk
         }
     }
 
-    // Schmale Bildlaufleiste im eigenen Design (statt der Windows-Leiste): dünner Griff, beim Darüberfahren
-    // breiter. Ziehen am Griff verschiebt, ein Klick daneben blättert um eine sichtbare Länge.
-    public class Bildlaufleiste : ThemaControl
-    {
-        public readonly bool Waagrecht;
-        int wert, gesamt, sichtbar;
-        int ziehStart = -1, ziehWert;
-
-        public event Action<int> Gescrollt;
-
-        public Bildlaufleiste(bool waagrecht)
-        {
-            Waagrecht = waagrecht;
-            Visible = false;
-            if (waagrecht) Height = Dicke; else Width = Dicke;
-        }
-
-        public static int Dicke
-        {
-            get { return Theme.S(10); }
-        }
-
-        int Maximum
-        {
-            get { return Math.Max(0, gesamt - sichtbar); }
-        }
-
-        int Laenge
-        {
-            get { return Waagrecht ? Width : Height; }
-        }
-
-        // gesamt: ganze Länge des Inhalts, sichtbar: davon sichtbar, wert: Anfang des sichtbaren Teils.
-        // Die Leiste ist nur sichtbar, wenn nicht alles Platz hat.
-        public void Setzen(int wert, int gesamt, int sichtbar)
-        {
-            wert = Math.Max(0, Math.Min(Math.Max(0, gesamt - sichtbar), wert));
-            bool noetig = sichtbar > 0 && gesamt > sichtbar;
-            if (noetig != Visible) Visible = noetig;
-            if (wert == this.wert && gesamt == this.gesamt && sichtbar == this.sichtbar) return;
-            this.wert = wert;
-            this.gesamt = gesamt;
-            this.sichtbar = sichtbar;
-            Invalidate();
-        }
-
-        void Griff(out float start, out float laenge)
-        {
-            laenge = Math.Min(Laenge, Math.Max(Theme.S(28), Laenge * (float)sichtbar / Math.Max(1, gesamt)));
-            start = Maximum == 0 ? 0 : (Laenge - laenge) * wert / Maximum;
-        }
-
-        // Griff zeichnen, auch für Inhalte, die ihre Leiste selbst malen (z. B. die Hinweise)
-        public static void Zeichnen(Graphics g, RectangleF bahn, float start, float laenge, bool waagrecht, bool aktiv)
-        {
-            float dicke = Theme.S(aktiv ? 8 : 4);
-            var r = waagrecht
-                ? new RectangleF(bahn.X + start, bahn.Y + (bahn.Height - dicke) / 2, laenge, dicke)
-                : new RectangleF(bahn.X + (bahn.Width - dicke) / 2, bahn.Y + start, dicke, laenge);
-            var glaettung = g.SmoothingMode;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            Formen.Fuellen(g, r, dicke / 2, aktiv ? Theme.Gedaempft : Theme.SchalterAus);
-            g.SmoothingMode = glaettung;
-        }
-
-        void Melden(int neu)
-        {
-            neu = Math.Max(0, Math.Min(Maximum, neu));
-            if (neu == wert) return;
-            wert = neu;
-            Invalidate();
-            var h = Gescrollt;
-            if (h != null) h(neu);
-        }
-
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                float s, l;
-                Griff(out s, out l);
-                int p = Waagrecht ? e.X : e.Y;
-                if (p >= s && p <= s + l)
-                {
-                    ziehStart = p;
-                    ziehWert = wert;
-                    Invalidate();
-                }
-                else Melden(wert + (p < s ? -sichtbar : sichtbar));
-            }
-            base.OnMouseDown(e);
-        }
-
-        protected override void OnMouseMove(MouseEventArgs e)
-        {
-            if (ziehStart >= 0)
-            {
-                float s, l;
-                Griff(out s, out l);
-                float proPixel = Maximum / Math.Max(1f, Laenge - l);
-                Melden(ziehWert + (int)Math.Round(((Waagrecht ? e.X : e.Y) - ziehStart) * proPixel));
-            }
-            base.OnMouseMove(e);
-        }
-
-        protected override void OnMouseUp(MouseEventArgs e)
-        {
-            ziehStart = -1;
-            Invalidate();
-            base.OnMouseUp(e);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            float s, l;
-            Griff(out s, out l);
-            Zeichnen(e.Graphics, ClientRectangle, s, l, Waagrecht, Hover || ziehStart >= 0);
-        }
-    }
-
-    // Bereich mit senkrechtem Bildlauf (Mausrad oder eigene Leiste) für Inhalte, die höher werden
+    // Bereich mit senkrechtem Bildlauf (Mausrad, ohne Leiste) für Inhalte, die höher werden
     // können als der Platz. Die Höhe des Inhalts kommt aus dessen GetPreferredSize.
     public class BildlaufPanel : Panel
     {
         readonly Control inhalt;
-        readonly Bildlaufleiste leiste = new Bildlaufleiste(false);
         int versatz;
-
-        // ohne sichtbare Leiste: geblättert wird nur mit dem Mausrad
-        public bool OhneLeiste;
 
         public BildlaufPanel(Control inhalt)
         {
             this.inhalt = inhalt;
             DoubleBuffered = true;
             Controls.Add(inhalt);
-            Controls.Add(leiste);
-            leiste.BringToFront();
-            leiste.Gescrollt += w => { versatz = w; Anordnen(); };
         }
 
         // Höhe, die der Inhalt bei dieser Breite ganz braucht
@@ -937,18 +891,9 @@ namespace ShiftDesk
             int breite = ClientSize.Width, hoehe = ClientSize.Height;
             if (breite <= 0 || hoehe <= 0) return;
             int h = InhaltHoehe(breite);
-            if (h > hoehe && !OhneLeiste)
-            {
-                // Platz für die Leiste lassen
-                breite -= Bildlaufleiste.Dicke + Theme.S(4);
-                h = InhaltHoehe(breite);
-            }
             versatz = Math.Max(0, Math.Min(Math.Max(0, h - hoehe), versatz));
             var ziel = new Rectangle(0, -versatz, breite, h);
             if (inhalt.Bounds != ziel) inhalt.Bounds = ziel;
-            leiste.Bounds = new Rectangle(ClientSize.Width - Bildlaufleiste.Dicke, 0, Bildlaufleiste.Dicke, hoehe);
-            leiste.Setzen(versatz, h, hoehe);
-            if (OhneLeiste) leiste.Visible = false;
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)
@@ -957,7 +902,7 @@ namespace ShiftDesk
             versatz -= Math.Sign(e.Delta) * Theme.S(60);
             Anordnen();
             var h = e as HandledMouseEventArgs;
-            if (h != null) h.Handled = versatz != vorher || leiste.Visible;
+            if (h != null) h.Handled = versatz != vorher || InhaltHoehe(ClientSize.Width) > ClientSize.Height;
             base.OnMouseWheel(e);
         }
     }

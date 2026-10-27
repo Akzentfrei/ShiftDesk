@@ -17,6 +17,7 @@ namespace ShiftDesk
         public Func<IEnumerable<string>> Optionen;
         public Func<string, string> Anzeige;   // Text für einen Wert (z. B. "" -> "Keine")
         public Func<DataGridViewRow, string> Symbol;   // Icon rechts im Feld, abhängig von der Zeile (null = keins)
+        public Func<DataGridViewRow, string> FesterText;   // fester Text statt Eingabe, abhängig von der Zeile (null = normal bearbeitbar)
         public ZeilenKnopf[] Knoepfe;          // nur bei Aktionen
         public string Erklaerung;              // Text hinter dem Info-Zeichen im Spaltenkopf (null = keins)
         public Color? Farbe;                   // farbiges Quadrat vor dem Titel (Postenfarbe in der Statistik)
@@ -58,7 +59,7 @@ namespace ShiftDesk
     }
 
     // Tabelle im eigenen Design, gleich auf allen Seiten: Karte mit runden Ecken, Kopf mit Info-Zeichen,
-    // Zeilen ohne Gitterlinien, eigene Bildlaufleisten (unten und rechts, nur wenn nötig), Mausrad
+    // Zeilen ohne Gitterlinien, keine Bildlaufleisten: geblättert wird mit dem Mausrad
     // (mit Shift waagrecht). Bearbeitbare Zellen sehen wie Eingabefelder aus und werden mit eigenen
     // Steuerelementen bearbeitet. Mehrfach-Spalten speichern ihre Werte als List<string> im Zellen-Tag,
     // Farb-Spalten eine Color im Tag.
@@ -66,7 +67,6 @@ namespace ShiftDesk
     {
         readonly DataGridView g;
         readonly Karte karte;
-        readonly Bildlaufleiste waagrecht = new Bildlaufleiste(true), senkrecht = new Bildlaufleiste(false);
         Eingabefeld editor;
         DataGridViewCell editZelle, hoverZelle, offeneZelle;
         int hoverZeile = -1, hoverKnopf = -1;
@@ -101,7 +101,7 @@ namespace ShiftDesk
                 EditMode = DataGridViewEditMode.EditProgrammatically,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 MultiSelect = !nurAnzeige,
-                ScrollBars = ScrollBars.None,   // eigene Leisten, siehe BildlaufAktualisieren
+                ScrollBars = ScrollBars.None,   // keine Leisten, siehe Mausrad
                 ShowCellToolTips = false,       // abgeschnittene Texte zeigt TippZeigen im eigenen Design
             };
             typeof(DataGridView).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(g, true, null);
@@ -150,7 +150,6 @@ namespace ShiftDesk
             g.MouseWheel += Mausrad;
             g.Paint += (s, e) =>
             {
-                BildlaufAktualisieren();
                 if (g.RowCount == 0 && LeerHinweis != null)
                 {
                     int oben = g.ColumnCount > 0 ? g.ColumnHeadersHeight : 0;
@@ -162,13 +161,6 @@ namespace ShiftDesk
 
             karte = new Karte();
             karte.Controls.Add(g);
-            karte.Controls.Add(waagrecht);
-            karte.Controls.Add(senkrecht);
-            waagrecht.BringToFront();
-            senkrecht.BringToFront();
-            karte.Layout += (s, e) => LeistenAnordnen();
-            waagrecht.Gescrollt += w => g.HorizontalScrollingOffset = w;
-            senkrecht.Gescrollt += w => { if (g.RowCount > 0) g.FirstDisplayedScrollingRowIndex = Math.Min(w, g.RowCount - 1); };
             FarbenAnwenden();
         }
 
@@ -177,7 +169,7 @@ namespace ShiftDesk
             get { return g; }
         }
 
-        // Die Karte mit Tabelle und Bildlaufleisten (das kommt auf die Seite)
+        // Die Karte mit der Tabelle (das kommt auf die Seite)
         public Karte Karte
         {
             get { return karte; }
@@ -311,25 +303,9 @@ namespace ShiftDesk
             }
             int max = Math.Max(0, g.Columns.GetColumnsWidth(DataGridViewElementStates.Visible) - g.ClientSize.Width);
             if (g.HorizontalScrollingOffset > max) g.HorizontalScrollingOffset = max;
-            BildlaufAktualisieren();
         }
 
         // ---------------------------------------------------------------- Bildlauf
-
-        void LeistenAnordnen()
-        {
-            var innen = karte.DisplayRectangle;
-            int d = Bildlaufleiste.Dicke;
-            waagrecht.Bounds = new Rectangle(innen.Left, innen.Bottom + (karte.Padding.Bottom - d) / 2, innen.Width, d);
-            senkrecht.Bounds = new Rectangle(innen.Right + (karte.Padding.Right - d) / 2, innen.Top + g.ColumnHeadersHeight, d,
-                Math.Max(0, innen.Height - g.ColumnHeadersHeight));
-        }
-
-        void BildlaufAktualisieren()
-        {
-            waagrecht.Setzen(g.HorizontalScrollingOffset, g.Columns.GetColumnsWidth(DataGridViewElementStates.Visible), g.ClientSize.Width);
-            senkrecht.Setzen(Math.Max(0, g.FirstDisplayedScrollingRowIndex), g.RowCount, g.DisplayedRowCount(false));
-        }
 
         void Waagrecht(int wert)
         {
@@ -349,7 +325,8 @@ namespace ShiftDesk
         // Mausrad: zwei Zeilen; mit Shift (oder wenn nur die Breite nicht reicht) waagrecht
         void Mausrad(object sender, MouseEventArgs e)
         {
-            bool zuBreit = waagrecht.Visible, zuHoch = senkrecht.Visible;
+            bool zuBreit = g.Columns.GetColumnsWidth(DataGridViewElementStates.Visible) > g.ClientSize.Width;
+            bool zuHoch = g.RowCount > g.DisplayedRowCount(false);
             if ((Control.ModifierKeys & Keys.Shift) != 0 || (zuBreit && !zuHoch))
                 Waagrecht(g.HorizontalScrollingOffset - Math.Sign(e.Delta) * Theme.S(80));
             else
@@ -647,6 +624,14 @@ namespace ShiftDesk
             }
             if (zelle == editZelle) return;   // dort liegt gerade das Eingabefeld
 
+            string fest = info.FesterText != null ? info.FesterText(g.Rows[e.RowIndex]) : null;
+            if (fest != null)
+            {
+                // ergibt sich von selbst: grauer Text ohne Eingabefeld
+                TextRenderer.DrawText(gr, fest, g.DefaultCellStyle.Font, TextFeld(info, e.CellBounds, null), Theme.Gedaempft,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                return;
+            }
             var feld = Feld(e.CellBounds);
             bool aktiv = zelle == offeneZelle;
             var r = new RectangleF(feld.X + 0.5f, feld.Y + 0.5f, feld.Width - 1, feld.Height - 1);
@@ -701,6 +686,7 @@ namespace ShiftDesk
             if (spalte < 0 || spalte >= g.ColumnCount || zeile < 0 || zeile >= g.RowCount) return;
             var info = Info(g.Columns[spalte]);
             if (info == null || info.Art == SpaltenArt.Aktionen || info.Art == SpaltenArt.Anzeige) return;
+            if (info.FesterText != null && info.FesterText(g.Rows[zeile]) != null) return;
             Schliessen(true);
             TippPlanen(null);
             ZelleZeigen(spalte, zeile);
@@ -747,7 +733,8 @@ namespace ShiftDesk
                     var aktuell = mehrfach ? (zelle.Tag as List<string> ?? new List<string>()) : new List<string> { WertText(zelle) };
                     var liste = new AuswahlListe(info.Optionen(), aktuell, mehrfach, feld.Width, info.Anzeige);
                     var popup = new Popup(liste);
-                    liste.Gewaehlt += w => { zelle.Value = w; popup.Close(); };
+                    // die ganze Zeile neu zeichnen: andere Zellen können davon abhängen (z. B. Gruppe beim Stv)
+                    liste.Gewaehlt += w => { zelle.Value = w; popup.Close(); g.InvalidateRow(zeile); };
                     liste.Geaendert += l => { zelle.Tag = l; g.InvalidateCell(zelle); };
                     AufklappenBei(zelle, popup, feld);
                     break;
