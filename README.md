@@ -74,7 +74,7 @@ WeTransfer o. ä. teilen). Vor jeder Weitergabe die Version in `src/Program.cs` 
 installierte Version die Aktualisierung anbietet.
 
 Auf GitHub veröffentlichen: Version in `src/Program.cs` erhöhen, committen und eine passende Marke pushen,
-z. B. `git tag v1.2.0` und `git push origin main v1.2.0`. Die GitHub Action (`.github/workflows/release.yml`)
+z. B. `git tag v1.2.0` und `git push origin main v1.2.0` (oder auf GitHub unter Actions → Release → «Run workflow»). Die GitHub Action (`.github/workflows/release.yml`)
 baut dann die exe und hängt `ShiftDesk.zip` und `ShiftDesk.exe` an ein neues Release; der Download-Link oben
 zeigt immer auf die neueste Version.
 
