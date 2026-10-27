@@ -130,6 +130,155 @@ namespace ShiftDesk
         }
     }
 
+    // Kleiner Info-Knopf neben einer Beschriftung: ein Klick zeigt die Erklärung in einem Popup
+    public class InfoKnopf : ThemaControl
+    {
+        readonly string titel, text;
+        bool hover;
+
+        public InfoKnopf(string titel, string text)
+        {
+            this.titel = titel;
+            this.text = text;
+            Size = new Size(Theme.S(20), Theme.S(20));
+            Cursor = Cursors.Hand;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left && !Popup.GeradeGeschlossen(this))
+                InfoText.Zeigen(this, new Rectangle(0, 0, Width, Height), this, titel, text);
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(Untergrund);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            InfoText.Symbol(e.Graphics, new RectangleF(0, 0, Width, Height), hover);
+        }
+    }
+
+    // Inhalt des Info-Popups: Titel und umbrochener Erklärungstext
+    public class InfoText : ThemaControl
+    {
+        static readonly Font TitelSchrift = new Font("Segoe UI Semibold", 10f);
+        static readonly Font Schrift = new Font("Segoe UI", 9.5f);
+        const TextFormatFlags Umbruch = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;
+        readonly string titel, text;
+        readonly int rand = Theme.S(14);
+        readonly Size titelGroesse, textGroesse;
+
+        InfoText(string titel, string text)
+        {
+            this.titel = titel ?? "";
+            this.text = text;
+            int innen = Theme.S(360);
+            titelGroesse = this.titel == "" ? Size.Empty : TextRenderer.MeasureText(this.titel, TitelSchrift, new Size(innen, 0), Umbruch);
+            textGroesse = TextRenderer.MeasureText(text, Schrift, new Size(innen, 0), Umbruch);
+            int abstand = this.titel == "" ? 0 : Theme.S(6);
+            Size = new Size(Math.Max(titelGroesse.Width, textGroesse.Width) + 2 * rand, rand + titelGroesse.Height + abstand + textGroesse.Height + rand);
+        }
+
+        // Unter dem Feld des Ankers zeigen; ein zweiter Klick auf denselben Besitzer schliesst wieder
+        public static void Zeigen(Control anker, Rectangle feld, object besitzer, string titel, string text)
+        {
+            new Popup(new InfoText(titel, text), besitzer).ZeigenBei(anker, feld);
+        }
+
+        // Das Info-Zeichen, gleich für Knopf und Tabellenkopf
+        public static void Symbol(Graphics g, RectangleF feld, bool hover)
+        {
+            float s = Math.Min(feld.Width, feld.Height) - Theme.S(2);
+            Lucide.Zeichne(g, "info", new RectangleF(feld.X + (feld.Width - s) / 2, feld.Y + (feld.Height - s) / 2, s, s), hover ? Theme.Akzent : Theme.Gedaempft, 2f);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Theme.Karte);
+            int y = rand;
+            if (titel != "")
+            {
+                TextRenderer.DrawText(g, titel, TitelSchrift, new Rectangle(rand, y, Width - 2 * rand, titelGroesse.Height), Theme.Text, Umbruch);
+                y += titelGroesse.Height + Theme.S(6);
+            }
+            TextRenderer.DrawText(g, text, Schrift, new Rectangle(rand, y, Width - 2 * rand, textGroesse.Height), Theme.Text, Umbruch);
+            Popup.Rand(g, Size);
+        }
+    }
+
+    // Hinweise zum Plan als Popup: Warnzeichen und umbrochener Text pro Hinweis, das Mausrad blättert
+    public class HinweisText : ThemaControl
+    {
+        static readonly Font TitelSchrift = new Font("Segoe UI Semibold", 10f);
+        static readonly Font Schrift = new Font("Segoe UI", 9.5f);
+        const TextFormatFlags Umbruch = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;
+        readonly string titel;
+        readonly List<string> texte;
+        readonly List<int> hoehen;
+        readonly int rand = Theme.S(14), zeichen = Theme.S(16), abstand = Theme.S(10), titelH, inhaltH, sichtbarH;
+        int versatz;
+
+        HinweisText(string titel, IEnumerable<string> hinweise)
+        {
+            SetStyle(ControlStyles.Selectable, true);
+            this.titel = titel;
+            texte = hinweise.ToList();
+            int breite = Theme.S(540);
+            int textW = breite - 2 * rand - zeichen - Theme.S(10);
+            hoehen = texte.Select(t => Math.Max(zeichen, TextRenderer.MeasureText(t, Schrift, new Size(textW, 0), Umbruch).Height)).ToList();
+            titelH = TextRenderer.MeasureText(titel, TitelSchrift).Height + Theme.S(10);
+            inhaltH = hoehen.Sum() + abstand * Math.Max(0, texte.Count - 1);
+            sichtbarH = Math.Min(inhaltH, Theme.S(380));
+            Size = new Size(breite, rand + titelH + sichtbarH + rand);
+        }
+
+        public static void Zeigen(Control anker, Rectangle feld, object besitzer, string titel, IEnumerable<string> hinweise)
+        {
+            new Popup(new HinweisText(titel, hinweise), besitzer).ZeigenBei(anker, feld);
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            versatz = Math.Max(0, Math.Min(inhaltH - sichtbarH, versatz - Math.Sign(e.Delta) * Theme.S(48)));
+            Invalidate();
+            base.OnMouseWheel(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Theme.Karte);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            TextRenderer.DrawText(g, titel, TitelSchrift, new Point(rand, rand), Theme.Text, TextFormatFlags.NoPrefix);
+            var liste = new Rectangle(rand, rand + titelH, Width - 2 * rand, sichtbarH);
+            g.SetClip(liste);
+            int y = liste.Top - versatz;
+            for (int i = 0; i < texte.Count; i++)
+            {
+                if (y + hoehen[i] >= liste.Top && y <= liste.Bottom)
+                {
+                    Lucide.Zeichne(g, "triangle-alert", new RectangleF(liste.Left, y + Theme.S(1), zeichen, zeichen), Theme.Warnung);
+                    TextRenderer.DrawText(g, texte[i], Schrift, new Rectangle(liste.Left + zeichen + Theme.S(10), y, liste.Width - zeichen - Theme.S(10), hoehen[i]), Theme.Text, Umbruch);
+                }
+                y += hoehen[i] + abstand;
+            }
+            g.ResetClip();
+            // Bildlaufbalken, wenn nicht alles Platz hat
+            if (inhaltH > sichtbarH)
+            {
+                float h = Math.Max(Theme.S(24), liste.Height * (float)sichtbarH / inhaltH);
+                float top = liste.Top + (liste.Height - h) * versatz / (inhaltH - sichtbarH);
+                Formen.Fuellen(g, new RectangleF(Width - Theme.S(8), top, Theme.S(4), h), Theme.S(2), Theme.Rand);
+            }
+            Popup.Rand(g, Size);
+        }
+    }
+
     // Kurzinfo beim Darüberfahren im eigenen Design (statt des Windows-Tooltips)
     public class ThemaTipp : ToolTip
     {

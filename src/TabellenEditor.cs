@@ -17,6 +17,7 @@ namespace ShiftDesk
         public Func<string, string> Anzeige;   // Text für einen Wert (z. B. "" -> "Keine")
         public Func<DataGridViewRow, string> Symbol;   // Icon rechts im Feld, abhängig von der Zeile (null = keins)
         public ZeilenKnopf[] Knoepfe;          // nur bei Aktionen
+        public string Erklaerung;              // Text hinter dem Info-Zeichen im Spaltenkopf (null = keins)
 
         public SpaltenInfo(SpaltenArt art, Func<IEnumerable<string>> optionen = null, Func<string, string> anzeige = null)
         {

@@ -152,8 +152,6 @@ namespace ShiftDesk
 
             var unterbesetzt = new Dictionary<int, List<int>>();   // Posten -> Stunden
             var ohneFahrer = new Dictionary<int, List<int>>();     // Fahrerposten -> Stunden ohne Fahrer
-            var essenGesehen = new Dictionary<long, HashSet<int>>();
-            var essenName = new Dictionary<long, string>();
 
             for (int t = 0; t < plan.Stunden; t++)
             {
@@ -163,7 +161,7 @@ namespace ShiftDesk
                 for (int r = 0; r < n; r++)
                     plan.Z[r, t] = gruppe[r] != null && gruppe[r].RuhtUm(h) ? Plan.RUHE : Plan.FREI;
 
-                EssensfensterBestimmen(zeit, essenName);
+                EssensfensterBestimmen(zeit);
 
                 var zeilen = Enumerable.Range(0, n).Where(r => plan.Z[r, t] == Plan.FREI).ToList();
                 int takt = cfg.TaktUm(h);
@@ -171,9 +169,6 @@ namespace ShiftDesk
 
                 if (essenAktiv)
                 {
-                    HashSet<int> gesehen;
-                    if (!essenGesehen.TryGetValue(essenSchluessel, out gesehen))
-                        essenGesehen[essenSchluessel] = gesehen = new HashSet<int>();
                     // Wer zur Essenszeit in Ruhe ist, isst dort: in der ersten Ruhestunde des Fensters eintragen
                     for (int r = 0; r < n; r++)
                         if (plan.Z[r, t] == Plan.RUHE && gegessen[r] != essenSchluessel)
@@ -181,9 +176,9 @@ namespace ShiftDesk
                             plan.Essen[r, t] = true;
                             gegessen[r] = essenSchluessel;
                         }
+                    // Wer keine Essensstunde bekommt, gibt keinen Hinweis: die Wache löst dann vor Ort kurz ab
                     foreach (int r in zeilen.Where(r => kannEssen[r] && BrauchtEssen(r, t)))
                     {
-                        gesehen.Add(r);
                         int k = plan.Z[r, t];
                         if (k >= 0 && cfg.Posten[k].EssenMoeglich && gegessen[r] != essenSchluessel)
                         {
@@ -191,9 +186,6 @@ namespace ShiftDesk
                             gegessen[r] = essenSchluessel;
                         }
                     }
-                    if (essenRestStunden == 1 && essenBeginn >= plan.Start)
-                        foreach (int r in gesehen.Where(r => gegessen[r] != essenSchluessel))
-                            plan.Warnungen.Add(Name(r) + ": kein Essen bei " + essenName[essenSchluessel]);
                 }
             }
 
@@ -251,7 +243,7 @@ namespace ShiftDesk
             }
         }
 
-        void EssensfensterBestimmen(DateTime zeit, Dictionary<long, string> namen)
+        void EssensfensterBestimmen(DateTime zeit)
         {
             essenAktiv = false;
             int h = zeit.Hour;
@@ -267,7 +259,6 @@ namespace ShiftDesk
                 essenRestStunden = (e.Bis - h + 24) % 24;
                 essenBeginn = beginn;
                 essenEnde = zeit.AddHours(essenRestStunden);
-                namen[essenSchluessel] = e.Name + " " + beginn.ToString("ddd dd.MM.", De);
                 return;
             }
         }

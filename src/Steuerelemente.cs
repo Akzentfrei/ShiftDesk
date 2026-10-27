@@ -587,63 +587,6 @@ namespace ShiftDesk
 
 namespace ShiftDesk
 {
-    // Liste der Hinweise unter dem Plan; scrollt mit dem Mausrad, ohne Bildlaufleiste
-    public class HinweisListe : ThemaControl
-    {
-        readonly System.Collections.Generic.List<string> eintraege = new System.Collections.Generic.List<string>();
-        readonly int zeileH = Theme.S(28);
-        int versatz;
-
-        public HinweisListe()
-        {
-            Font = new Font("Segoe UI", 9.5f);
-        }
-
-        public void Setzen(System.Collections.Generic.IEnumerable<string> texte)
-        {
-            eintraege.Clear();
-            eintraege.AddRange(texte);
-            versatz = 0;
-            Invalidate();
-        }
-
-        int MaxVersatz
-        {
-            get { return Math.Max(0, eintraege.Count * zeileH - Height); }
-        }
-
-        protected override void OnMouseEnter(EventArgs e)
-        {
-            Fokus.FuerMausrad(this);
-            base.OnMouseEnter(e);
-        }
-
-        protected override void OnMouseWheel(MouseEventArgs e)
-        {
-            versatz = Math.Max(0, Math.Min(MaxVersatz, versatz - Math.Sign(e.Delta) * zeileH * 2));
-            Invalidate();
-            base.OnMouseWheel(e);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g = e.Graphics;
-            g.Clear(Theme.Karte);
-            int s = Theme.S(16);
-            for (int i = 0; i < eintraege.Count; i++)
-            {
-                int y = i * zeileH - versatz;
-                if (y + zeileH < 0 || y > Height) continue;
-                Lucide.Zeichne(g, "triangle-alert", new RectangleF(Theme.S(2), y + (zeileH - s) / 2f, s, s), Theme.Warnung);
-                TextRenderer.DrawText(g, eintraege[i], Font, new Rectangle(s + Theme.S(12), y, Width - s - Theme.S(12), zeileH), Theme.Text,
-                    TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            }
-        }
-    }
-}
-
-namespace ShiftDesk
-{
     // Aufklappfeld im Eingabefeld-Stil (eigene Auswahlliste statt Windows-Combobox)
     public class AuswahlFeld : ThemaControl
     {

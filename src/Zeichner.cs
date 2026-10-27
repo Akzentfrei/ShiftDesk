@@ -15,25 +15,25 @@ namespace ShiftDesk
         public CultureInfo Kultur;
         public string DatumLang;
         public string Titel, Einheit, Fuer, Datum, Legende, Zeit, Wer;
-        public string Ruhezeit, OhnePosten, Essen, Draussen, Fahrer, NichtEingeteilt, Erstellt, Seite;
+        public string Zeichen, Ruhezeit, OhnePosten, EssenVor, EssenNach, EssenRuhe, Draussen, Fahrer, NichtEingeteilt, Erstellt, Seite;
 
         public static readonly Druck[] Sprachen =
         {
             new Druck { Kuerzel = "de", Name = "Deutsch", Kultur = new CultureInfo("de-CH"), DatumLang = "dddd, dd.MM.yyyy",
                 Titel = "Ablösungsliste", Einheit = "Einheit", Fuer = "Für", Datum = "Datum", Legende = "Legende", Zeit = "Zeit", Wer = "Wer",
-                Ruhezeit = "Ruhezeit", OhnePosten = "ohne Posten", Essen = "Essen (oben links: vor der Ablösung, oben rechts: danach)", Draussen = "Draussen", Fahrer = "Fahrer",
+                Zeichen = "Zeichen", Ruhezeit = "Ruhezeit", OhnePosten = "ohne Posten", EssenVor = "Essen vor der Ablösung", EssenNach = "Essen nach der Ablösung", EssenRuhe = "Essen in der Ruhezeit", Draussen = "Draussen", Fahrer = "Fahrer",
                 NichtEingeteilt = "Nicht eingeteilt", Erstellt = "Erstellt mit ShiftDesk am {0}", Seite = "Seite {0} von {1}" },
             new Druck { Kuerzel = "fr", Name = "Français", Kultur = new CultureInfo("fr-CH"), DatumLang = "dddd dd.MM.yyyy",
                 Titel = "Liste de relève", Einheit = "Unité", Fuer = "Pour", Datum = "Date", Legende = "Légende", Zeit = "Heure", Wer = "Qui",
-                Ruhezeit = "Repos", OhnePosten = "sans poste", Essen = "Repas (en haut à gauche : avant la relève, à droite : après)", Draussen = "À l'extérieur", Fahrer = "Chauffeur",
+                Zeichen = "Signes", Ruhezeit = "Repos", OhnePosten = "sans poste", EssenVor = "Repas avant la relève", EssenNach = "Repas après la relève", EssenRuhe = "Repas pendant le repos", Draussen = "À l'extérieur", Fahrer = "Chauffeur",
                 NichtEingeteilt = "Non engagés", Erstellt = "Créé avec ShiftDesk le {0}", Seite = "Page {0} sur {1}" },
             new Druck { Kuerzel = "it", Name = "Italiano", Kultur = new CultureInfo("it-CH"), DatumLang = "dddd dd.MM.yyyy",
                 Titel = "Lista dei turni", Einheit = "Unità", Fuer = "Per", Datum = "Data", Legende = "Legenda", Zeit = "Ora", Wer = "Chi",
-                Ruhezeit = "Riposo", OhnePosten = "senza posto", Essen = "Pasto (in alto a sinistra: prima del cambio, a destra: dopo)", Draussen = "All'esterno", Fahrer = "Autista",
+                Zeichen = "Simboli", Ruhezeit = "Riposo", OhnePosten = "senza posto", EssenVor = "Pasto prima del cambio", EssenNach = "Pasto dopo il cambio", EssenRuhe = "Pasto durante il riposo", Draussen = "All'esterno", Fahrer = "Autista",
                 NichtEingeteilt = "Non impiegati", Erstellt = "Creato con ShiftDesk il {0}", Seite = "Pagina {0} di {1}" },
             new Druck { Kuerzel = "en", Name = "English", Kultur = new CultureInfo("en-GB"), DatumLang = "dddd, dd.MM.yyyy",
                 Titel = "Relief Roster", Einheit = "Unit", Fuer = "For", Datum = "Date", Legende = "Legend", Zeit = "Time", Wer = "Who",
-                Ruhezeit = "Rest", OhnePosten = "no post", Essen = "Meal (top left: before the relief, top right: after)", Draussen = "Outdoors", Fahrer = "Driver",
+                Zeichen = "Symbols", Ruhezeit = "Rest", OhnePosten = "no post", EssenVor = "Meal before relief", EssenNach = "Meal after relief", EssenRuhe = "Meal during rest", Draussen = "Outdoors", Fahrer = "Driver",
                 NichtEingeteilt = "Not assigned", Erstellt = "Created with ShiftDesk on {0}", Seite = "Page {0} of {1}" },
         };
 
@@ -162,7 +162,7 @@ namespace ShiftDesk
                 // Masse der Tabelle
                 int n = plan.Zeilen.Count;
                 bool frei = Enumerable.Range(0, n).Any(r => Enumerable.Range(0, stunden).Any(c => plan.Z[r, erste + c] == Plan.FREI));
-                float zeichenH = 12 * u;
+                float zeichenH = 16 * u;
                 float neH = plan.NichtEingeteilt.Count > 0 ? zeichenH : 0;
                 float fussH = 12 * u;
                 float fuss = 5 * u + zeichenH + neH + 4 * u + fussH;
@@ -178,18 +178,7 @@ namespace ShiftDesk
                 g.DrawLine(duenn, b.Left, tabOben, xs, kopfY);
                 g.DrawString(t.Zeit, fKopf, tText, new RectangleF(b.Left, tabOben + 2 * u, xs - b.Left - 5 * u, 14 * u), rechtsMitte);
                 g.DrawString(t.Wer, fKopf, tText, new RectangleF(b.Left + 4 * u, kopfY - 15 * u, gradW + nameW, 14 * u), links);
-                var stundeTh = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
-                for (int c = 0; c <= stunden; c++)
-                {
-                    DateTime z = von.AddHours(c);
-                    string text = c == stunden && c > 0 && z.Hour == 0 ? "2400" : z.ToString("HHmm");
-                    var alt = g.Transform;
-                    g.TranslateTransform(spalteX(c), kopfY - 3 * u);
-                    g.RotateTransform(-90);
-                    g.DrawString(text, fStunde, tText, new RectangleF(0, -6 * u, stundeH, 12 * u), stundeTh);
-                    g.Transform = alt;
-                }
-
+                bool essenVorDa = false, essenNachDa = false, essenRuheDa = false;
                 using (var fName = new Font(Schrift, Math.Min(9.5f * u, zeileH * 0.44f), FontStyle.Bold, GraphicsUnit.World))
                 using (var fGrad = new Font(Schrift, Math.Min(9.5f * u, zeileH * 0.44f), GraphicsUnit.World))
                 using (var fZeichen = new Font(Schrift, Math.Min(Math.Min(11 * u, zeileH * 0.46f), spalteW * 0.42f), FontStyle.Bold, GraphicsUnit.World))
@@ -238,7 +227,7 @@ namespace ShiftDesk
                             }
                             else if (posten(c - 1)) essenRechts.Add(feldVon(c - 1));
                             else if (posten(c + 1)) essenLinks.Add(feldVon(c + 1));
-                            else essenMitte[c] = true;
+                            else essenMitte[c] = essenRuheDa = true;
                         }
 
                         float es = Math.Min(spalteW, zeileH) * 0.5f;
@@ -266,6 +255,8 @@ namespace ShiftDesk
                                 g.DrawString("-", fZeichen, tText, feld, mitte);
                         }
 
+                        essenVorDa |= essenLinks.Count > 0;
+                        essenNachDa |= essenRechts.Count > 0;
                         foreach (var feld in essenLinks)
                             EssenSymbol(g, new RectangleF(feld.Left + 1 * u, feld.Top + 1 * u, es, es));
                         foreach (var feld in essenRechts)
@@ -296,48 +287,93 @@ namespace ShiftDesk
                 g.DrawLine(dick, b.Left, kopfY, b.Right, kopfY);
                 g.DrawRectangle(dick, b.Left, tabOben, b.Width, tabUnten - tabOben);
 
-                // Zeichen unter der Tabelle
-                float zy0 = tabUnten + 5 * u;
-                float zx = b.Left;
-                var zeichen = new List<KeyValuePair<string, Action<RectangleF>>>();
-                zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Ruhezeit, feld =>
+                // Stunden erst jetzt, mit einer Lücke in den Linien dahinter (Anfang, Mitternacht, Ende)
+                var stundeTh = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
+                for (int c = 0; c <= stunden; c++)
                 {
-                    using (var f = new SolidBrush(Leer)) g.FillRectangle(f, feld);
+                    DateTime z = von.AddHours(c);
+                    string text = c == stunden && c > 0 && z.Hour == 0 ? "2400" : z.ToString("HHmm");
+                    var gross = g.MeasureString(text, fStunde);
+                    float th = fStunde.GetHeight(g) * 0.8f;
+                    var alt = g.Transform;
+                    g.TranslateTransform(spalteX(c), kopfY - 3 * u);
+                    g.RotateTransform(-90);
+                    g.FillRectangle(Brushes.White, -1.5f * u, -th / 2, gross.Width + 1.5f * u, th);
+                    g.DrawString(text, fStunde, tText, new RectangleF(0, -6 * u, stundeH, 12 * u), stundeTh);
+                    g.Transform = alt;
+                }
+
+                // Zeichen unter der Tabelle: Beschriftung in der Namensspalte, Muster ab dem Raster wie im Plan
+                float zy0 = tabUnten + 5 * u;
+                float mw = 22 * u, mh = 13 * u, ms = mh * 0.7f;
+                var musterFarbe = cfg.Posten.Count > 0 ? Pastell(cfg.Posten[0].Farbe) : Leer;
+                string musterZeichen = cfg.Posten.Count > 0 ? Kuerzel(0) : "";
+                Action<RectangleF, Color, string> muster = (feld, farbe, text) =>
+                {
+                    using (var f = new SolidBrush(farbe)) g.FillRectangle(f, feld);
                     g.DrawRectangle(gitter, feld.X, feld.Y, feld.Width, feld.Height);
-                    g.DrawString("-", fKleinFett, tText, feld, mitte);
-                }));
+                    if (text != "") g.DrawString(text, fKleinFett, tText, feld, mitte);
+                };
+                var zeichen = new List<KeyValuePair<string, Action<RectangleF>>>();
+                zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Ruhezeit, feld => muster(feld, Leer, "-")));
                 if (frei)
-                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.OhnePosten, feld =>
-                        g.DrawRectangle(gitter, feld.X, feld.Y, feld.Width, feld.Height)));
-                if (cfg.Essenszeiten.Count > 0)
-                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Essen, feld =>
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.OhnePosten, feld => muster(feld, Color.White, "")));
+                if (essenVorDa)
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.EssenVor, feld =>
                     {
-                        var gross = RectangleF.Inflate(feld, 2 * u, 2 * u);
-                        using (var f = new SolidBrush(Leer)) g.FillEllipse(f, gross);
-                        EssenSymbol(g, gross);
+                        muster(feld, musterFarbe, "");
+                        g.DrawString(musterZeichen, fKleinFett, tText, RectangleF.FromLTRB(feld.Left + ms * 0.6f, feld.Top, feld.Right, feld.Bottom), mitte);
+                        EssenSymbol(g, new RectangleF(feld.Left + 0.6f * u, feld.Top + 0.6f * u, ms, ms));
+                    }));
+                if (essenNachDa)
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.EssenNach, feld =>
+                    {
+                        muster(feld, musterFarbe, "");
+                        g.DrawString(musterZeichen, fKleinFett, tText, RectangleF.FromLTRB(feld.Left, feld.Top, feld.Right - ms * 0.6f, feld.Bottom), mitte);
+                        EssenSymbol(g, new RectangleF(feld.Right - ms - 0.6f * u, feld.Top + 0.6f * u, ms, ms));
+                    }));
+                if (essenRuheDa)
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.EssenRuhe, feld =>
+                    {
+                        muster(feld, Leer, "");
+                        EssenSymbol(g, RectangleF.Inflate(feld, -0.5f * u, -0.5f * u));
                     }));
                 if (cfg.Posten.Any(p => p.Draussen))
-                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Draussen, feld => SchneeSymbol(g, feld)));
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Draussen, feld =>
+                        SchneeSymbol(g, new RectangleF(feld.Left + (feld.Width - 10 * u) / 2, feld.Top + (feld.Height - 10 * u) / 2, 10 * u, 10 * u))));
                 if (plan.Zeilen.Any(p => p.Fahrer))
-                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Fahrer, feld => AutoSymbol(g, RectangleF.Inflate(feld, 1.5f * u, 1.5f * u))));
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Fahrer, feld =>
+                        AutoSymbol(g, new RectangleF(feld.Left + (feld.Width - 12 * u) / 2, feld.Top + (feld.Height - 12 * u) / 2, 12 * u, 12 * u))));
+
+                var beschriftung = new RectangleF(b.Left + 4 * u, zy0, xs - b.Left - 8 * u, zeichenH);
+                g.DrawString(t.Zeichen, fKleinFett, tText, beschriftung, links);
+                float zx = xs;
                 foreach (var z in zeichen)
                 {
-                    float zq = 9 * u;
-                    z.Value(new RectangleF(zx, zy0 + (zeichenH - zq) / 2, zq, zq));
+                    z.Value(new RectangleF(zx, zy0 + (zeichenH - mh) / 2, mw, mh));
                     float w = g.MeasureString(z.Key, fKlein).Width;
-                    g.DrawString(z.Key, fKlein, tText, new RectangleF(zx + zq + 3 * u, zy0, w + 2 * u, zeichenH), links);
-                    zx += zq + 3 * u + w + 14 * u;
+                    g.DrawString(z.Key, fKlein, tText, new RectangleF(zx + mw + 4 * u, zy0, w + 2 * u, zeichenH), links);
+                    zx += mw + 4 * u + w + 16 * u;
                 }
 
                 // Nicht eingeteilte Personen (z. B. Reserve), nach Funktion
                 if (plan.NichtEingeteilt.Count > 0)
                 {
                     float ry = zy0 + zeichenH;
-                    string text = string.Join("     ", plan.NichtEingeteilt.GroupBy(p => p.Funktion)
-                        .Select(gr => gr.Key + ":  " + string.Join(", ", gr.Select(p => (p.Grad + " " + p.Name).Trim()))));
-                    float w = g.MeasureString(t.NichtEingeteilt, fKleinFett).Width + 6 * u;
-                    g.DrawString(t.NichtEingeteilt, fKleinFett, tText, new RectangleF(b.Left, ry, w, zeichenH), links);
-                    g.DrawString(text, fKlein, tText, new RectangleF(b.Left + w, ry, b.Right - b.Left - w, zeichenH), links);
+                    beschriftung.Y = ry;
+                    g.DrawString(t.NichtEingeteilt, fKleinFett, tText, beschriftung, links);
+                    float nx = xs;
+                    foreach (var gr in plan.NichtEingeteilt.GroupBy(p => p.Funktion))
+                    {
+                        string titel = gr.Key + ":";
+                        string namen = string.Join(", ", gr.Select(p => (p.Grad + " " + p.Name).Trim()));
+                        float tw = g.MeasureString(titel, fKleinFett).Width;
+                        g.DrawString(titel, fKleinFett, tGrau, new RectangleF(nx, ry, tw + 2 * u, zeichenH), links);
+                        float nw = Math.Min(b.Right - nx - tw - 2 * u, g.MeasureString(namen, fKlein).Width);
+                        if (nw <= 0) break;
+                        g.DrawString(namen, fKlein, tText, new RectangleF(nx + tw + 2 * u, ry, nw + 2 * u, zeichenH), links);
+                        nx += tw + 2 * u + nw + 16 * u;
+                    }
                 }
 
                 float fy = b.Bottom - fussH;

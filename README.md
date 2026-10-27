@@ -24,7 +24,8 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 - **Gesunderhaltung**: niemand ist länger als eingestellt (z. B. 2 Stunden) am Stück draussen; bei längeren
   Ablöseblöcken tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis
 - **Essenszeiten**: jede Person, die das ganze Fenster im Dienst ist, bekommt eine Essensstunde auf einem
-  Posten mit «Essen möglich»; wer zur Essenszeit in Ruhe ist, isst in der Ruhezeit (im Plan ebenfalls markiert)
+  Posten mit «Essen möglich»; wer zur Essenszeit in Ruhe ist, isst in der Ruhezeit (im Plan ebenfalls markiert); klappt es nicht für alle,
+  gibt es keinen Hinweis, die Wache löst dann vor Ort kurz ab
 - **Plan** über mehrere Tage, Ablösung jede Stunde oder alle 2–4 Stunden, wahlweise mit einem Zeitfenster
   (z. B. 00:00 bis 06:00), in dem trotzdem jede Stunde abgelöst wird; jede Erstellung ergibt eine neue
   faire Variante (Zuteilung mit der Ungarischen Methode)

@@ -53,7 +53,6 @@ namespace ShiftDesk
         Eingabefeld txtName, txtEinheit;
         DatumFeld dtStart, dtEnde;
         AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis, teams, sprache;
-        bool hinweiseOffen;
         static readonly string[] AbloesungListe = { "Jede Stunde", "Alle 2 Stunden", "Alle 3 Stunden", "Alle 4 Stunden" };
         // Index = erlaubte Stunden am Stück draussen, 0 = keine Grenze
         static readonly string[] DraussenListe = { "Keine Grenze", "Höchstens 1 Stunde", "Höchstens 2 Stunden", "Höchstens 3 Stunden", "Höchstens 4 Stunden", "Höchstens 6 Stunden" };
@@ -69,9 +68,6 @@ namespace ShiftDesk
         Label lblSeite;
         StatusChip status;
         ModernButton btnZurueck, btnVor;
-        Karte warnKarte;
-        Panel warnAbstand;
-        HinweisListe lstWarnungen;
 
         public MainForm(string datei = null)
         {
@@ -152,7 +148,7 @@ namespace ShiftDesk
             foreach (var a in themen) a();
             foreach (var g in tabellen) GridFarben(g);
             Theme.Titelleiste(this);
-            foreach (var c in tabellen.Cast<Control>().Concat(new Control[] { lstWarnungen }))
+            foreach (var c in tabellen)
                 BildlaufRekursiv(c);
             Invalidate(true);
         }
@@ -299,32 +295,30 @@ namespace ShiftDesk
 
         // ---------------------------------------------------------------- Seiten
 
-        Panel NeueSeite(string titel, string untertitel, Control inhaltControl, params Control[] knoepfe)
+        // Seite mit Titel; die Erklärung steckt im Info-Knopf neben dem Titel
+        Panel NeueSeite(string titel, string info, Control inhaltControl, params Control[] knoepfe)
         {
             var seitePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(Theme.S(32), Theme.S(24), Theme.S(32), Theme.S(28)) };
-            var kopf = new Panel { Dock = DockStyle.Top, Height = Theme.S(84) };
+            var kopf = new Panel { Dock = DockStyle.Top, Height = Theme.S(62) };
             var lblTitel = new Label { Text = titel, Font = new Font("Segoe UI Semibold", 19f), AutoSize = true, Location = new Point(-Theme.S(3), 0), UseMnemonic = false };
-            var lblUnter = new Label { Text = untertitel, Font = new Font("Segoe UI", 9.5f), AutoSize = false, Location = new Point(0, Theme.S(42)), Height = Theme.S(40), UseMnemonic = false };
             var leiste = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, Padding = new Padding(0, Theme.S(6), 0, 0) };
             foreach (var k in knoepfe) leiste.Controls.Add(k);
-            kopf.Controls.Add(lblUnter);
             kopf.Controls.Add(lblTitel);
             kopf.Controls.Add(leiste);
-            kopf.Resize += (s, e) =>
+            if (!string.IsNullOrEmpty(info))
             {
-                // Erklärungstext so hoch wie nötig, damit nichts abgeschnitten wird
-                int breite = Math.Max(Theme.S(100), kopf.Width - leiste.Width - Theme.S(24));
-                int h = TextRenderer.MeasureText(untertitel, lblUnter.Font, new Size(breite, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height;
-                lblUnter.Size = new Size(breite, h + Theme.S(2));
-                int hoehe = Theme.S(44) + h + Theme.S(12);
-                if (kopf.Height != hoehe) kopf.Height = hoehe;
-            };
+                var knopf = new InfoKnopf(titel, info) { Size = new Size(Theme.S(22), Theme.S(22)) };
+                Action setzen = () => knopf.Location = new Point(lblTitel.Right + Theme.S(4), lblTitel.Top + (lblTitel.Height - knopf.Height) / 2 + Theme.S(2));
+                lblTitel.SizeChanged += (s, e) => setzen();
+                setzen();
+                kopf.Controls.Add(knopf);
+            }
             Thema(() =>
             {
                 seitePanel.BackColor = kopf.BackColor = leiste.BackColor = Theme.Hintergrund;
-                lblTitel.BackColor = lblUnter.BackColor = Theme.Hintergrund;
+                lblTitel.BackColor = Theme.Hintergrund;
                 lblTitel.ForeColor = Theme.Text;
-                lblUnter.ForeColor = Theme.Gedaempft;
+                foreach (var k in kopf.Controls.OfType<InfoKnopf>()) k.Invalidate();
             });
             inhaltControl.Dock = DockStyle.Fill;
             seitePanel.Controls.Add(inhaltControl);
@@ -358,8 +352,12 @@ namespace ShiftDesk
             gridPersonen.Columns.Add(Spalte("Fahrer", "Fahrer", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             Zeilenknoepfe(gridPersonen, true);
             Bearbeitbar(gridPersonen);
+            Erklaeren(gridPersonen, "Grad", "Wählst du aus der Liste der Seite «Funktionen & Grade».");
+            Erklaeren(gridPersonen, "Funktion", "Wählst du aus der Liste der Seite «Funktionen & Grade». Die Funktion bestimmt, welche Posten die Person besetzen darf.");
+            Erklaeren(gridPersonen, "Gruppe", "Die Gruppe bestimmt die Ruhezeit (Seite «Gruppen & Ruhezeiten»). Ohne Gruppe hat die Person keine Ruhezeit.");
+            Erklaeren(gridPersonen, "Fahrer", "Fahrer haben im Plan nur den Posten vom Typ «Fahrer» (z. B. Presto) und Ruhezeit, sonst nichts, auch keine Essensstunde: sie essen in der Ruhezeit. Im Plan sind sie mit einem Auto markiert.");
             return NeueSeite("Personen",
-                "Alle Personen der Wache. Grad und Funktion wählst du aus den Listen der Seite «Funktionen & Grade». Die Gruppe bestimmt die Ruhezeit. «Fahrer» haben im Plan nur den Posten vom Typ «Fahrer» (z. B. Presto) und Ruhezeit, sonst nichts, auch keine Essensstunde (sie essen in der Ruhezeit); im Plan sind sie mit einem Auto markiert. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird; die Reihenfolge änderst du mit den Pfeilen.",
+                "Alle Personen der Wache. Die Reihenfolge änderst du mit den Pfeilen. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird.",
                 KarteMit(gridPersonen),
                 Knopf("Person hinzufügen", "plus", NeuePerson, true));
         }
@@ -372,8 +370,10 @@ namespace ShiftDesk
             gridGruppen.Columns.Add(Spalte("Bis", "Ruhe bis", 80, StundenInfo()));
             Zeilenknoepfe(gridGruppen, false);
             Bearbeitbar(gridGruppen).Umbenannt += (z, alt, neu) => { if (z.OwningColumn.Name == "Name") Ersetzen(gridPersonen, "Gruppe", alt, neu); };
+            const string ruhe = "Von wann bis wann die Gruppe ruht, auch über Mitternacht (z. B. 23:00 bis 07:00). Gleiche Zeit bei «von» und «bis» bedeutet keine Ruhezeit.";
+            Erklaeren(gridGruppen, "Von", ruhe);
             return NeueSeite("Gruppen & Ruhezeiten",
-                "Jede Gruppe ruht jeden Tag im gleichen Zeitfenster, auch über Mitternacht (z. B. 23:00 bis 07:00). Gleiche Zeit bei «von» und «bis» bedeutet keine Ruhezeit. Auch die Wachtkommandanten brauchen je eine Gruppe.",
+                "Jede Gruppe ruht jeden Tag im gleichen Zeitfenster. Auch die Wachtkommandanten brauchen je eine Gruppe.",
                 KarteMit(gridGruppen),
                 Knopf("Gruppe hinzufügen", "plus", () => Hinzufuegen(gridGruppen, "", Zeit.Text(23), Zeit.Text(7)), true));
         }
@@ -394,8 +394,16 @@ namespace ShiftDesk
             gridPosten.Columns.Add(Spalte("Essen", "Essen", 42, new SpaltenInfo(SpaltenArt.Schalter)));
             Zeilenknoepfe(gridPosten, true);
             Bearbeitbar(gridPosten);
+            Erklaeren(gridPosten, "Funktionen", "Wer den Posten besetzen darf. «Alle» = jede Funktion, die im Plan eingeteilt wird.");
+            const string offen = "Von wann bis wann der Posten besetzt ist, auch über Mitternacht. Gleiche Zeit bei «von» und «bis» = immer offen.";
+            Erklaeren(gridPosten, "Von", offen);
+            Erklaeren(gridPosten, "Typ", "«Normal»: gewöhnlicher Posten. «Auffang» (z. B. Pikett): bekommt alle übrigen Leute. «Fahrer» (z. B. Presto): der erste Platz ist für einen Fahrer, die weiteren Plätze bekommen Fahrer, wenn welche da sind, sonst andere Leute; Fahrer selbst sind nur dort oder in Ruhe.");
+            Erklaeren(gridPosten, "Pflicht", "Muss immer voll besetzt sein und wird vor allen anderen Posten besetzt. Wacht Kdt, Presto und Subito sind immer Pflicht.");
+            Erklaeren(gridPosten, "Draussen", "Posten im Freien, im Plan mit Schneeflocke. Niemand bleibt länger am Stück draussen als auf der Plan-Seite bei «Am Stück draussen» eingestellt.");
+            Erklaeren(gridPosten, "AmStueck", "Die gleiche Person bleibt möglichst lange auf dem Posten, statt bei jeder Ablösung zu wechseln.");
+            Erklaeren(gridPosten, "Essen", "Auf diesem Posten kann man essen: hier bekommen die Leute ihre Essensstunde (Seite «Essenszeiten»).");
             return NeueSeite("Posten",
-                "Reihenfolge = Wichtigkeit, unten bleibt bei zu wenig Leuten zuerst leer; «Pflicht» = muss immer voll besetzt sein und wird vor allen anderen besetzt. Wacht Kdt, Presto und Subito gibt es immer. «Funktionen» = wer den Posten besetzen darf. «Auffang» (z. B. Pikett) bekommt alle übrigen Leute. Typ «Fahrer» (z. B. Presto): der erste Platz ist für einen Fahrer, die weiteren Plätze bekommen Fahrer, wenn welche da sind, sonst andere Leute; Fahrer selbst sind nur dort oder in Ruhe. «Draussen» (Schneeflocke) = Posten im Freien, niemand bleibt länger als auf der Plan-Seite eingestellt am Stück draussen. «Am Stück» = gleiche Person bleibt möglichst lange.",
+                "Die Reihenfolge ist die Wichtigkeit: bei zu wenig Leuten bleibt unten zuerst leer. Wacht Kdt, Presto und Subito gibt es immer.",
                 KarteMit(gridPosten),
                 Knopf("Posten hinzufügen", "plus", () =>
                 {
@@ -408,15 +416,17 @@ namespace ShiftDesk
         Panel SeiteEssen()
         {
             gridEssen = NeuesGrid();
-            gridEssen.Columns.Add(Spalte("Name", "Mahlzeit", 140, new SpaltenInfo(SpaltenArt.Text)));
+            gridEssen.Columns.Add(Spalte("Name", "Essenszeit", 140, new SpaltenInfo(SpaltenArt.Text)));
             gridEssen.Columns.Add(Spalte("Von", "von", 80, StundenInfo()));
             gridEssen.Columns.Add(Spalte("Bis", "bis", 80, StundenInfo()));
             Zeilenknoepfe(gridEssen, false);
             Bearbeitbar(gridEssen);
+            const string fenster = "Von wann bis wann gegessen wird. Jede Person, die das ganze Fenster im Dienst ist, bekommt darin eine Stunde zum Essen.";
+            Erklaeren(gridEssen, "Von", fenster);
             return NeueSeite("Essenszeiten",
-                "In jedem Zeitfenster bekommt jede Person im Dienst eine Stunde zum Essen, auf einem Posten mit «Essen möglich». Wer zur Essenszeit in Ruhe ist, isst in der Ruhezeit. Im Plan ist diese Stunde mit dem Besteck markiert.",
+                "In jedem Zeitfenster bekommt jede Person im Dienst eine Stunde zum Essen, auf einem Posten mit «Essen». Wer zur Essenszeit in Ruhe ist, isst in der Ruhezeit. Im Plan steht das Besteck oben links im Postenfeld, wenn vor der Ablösung gegessen wird, oben rechts, wenn danach; mitten in der Ruhezeit steht es gross in der Stunde.",
                 KarteMit(gridEssen),
-                Knopf("Mahlzeit hinzufügen", "plus", () => Hinzufuegen(gridEssen, "", Zeit.Text(11), Zeit.Text(13)), true));
+                Knopf("Essenszeit hinzufügen", "plus", () => Hinzufuegen(gridEssen, "", Zeit.Text(11), Zeit.Text(13)), true));
         }
 
         Panel SeitePlan()
@@ -433,21 +443,27 @@ namespace ShiftDesk
             txtEinheit.Box.TextChanged += (s, e) => DruckAngabenUebernehmen();
             sprache.WertGeaendert += (s, e) => DruckAngabenUebernehmen();
             var felder = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
-            felder.Controls.Add(Feld("Name", txtName));
-            felder.Controls.Add(Feld("Einheit", txtEinheit));
-            felder.Controls.Add(Feld("Sprache Ausdruck", sprache));
+            felder.Controls.Add(Feld("Name", txtName,
+                "Steht auf dem Ausdruck bei «Für». Ändert den Plan nicht und ist sofort in der Vorschau zu sehen."));
+            felder.Controls.Add(Feld("Einheit", txtEinheit,
+                "Steht auf dem Ausdruck bei «Einheit». Ändert den Plan nicht und ist sofort in der Vorschau zu sehen."));
+            felder.Controls.Add(Feld("Sprache Ausdruck", sprache,
+                "Sprache des Ausdrucks (Deutsch, Französisch, Italienisch oder Englisch). Namen von Posten, Funktionen und Personen bleiben so, wie du sie erfasst hast."));
             felder.Controls.Add(Feld("Start", dtStart));
-            felder.Controls.Add(Feld("Ende", dtEnde));
+            felder.Controls.Add(Feld("Ende", dtEnde, "Der Plan kann über mehrere Tage gehen (höchstens 31). Je 24 Stunden kommen auf eine Seite."));
             abloesung = new AuswahlFeld(AbloesungListe) { Width = Theme.S(170) };
-            felder.Controls.Add(Feld("Ablösung", abloesung));
+            felder.Controls.Add(Feld("Ablösung", abloesung, "Wie oft die Posten wechseln, ab Mitternacht gerechnet (z. B. alle 2 Stunden: 00:00, 02:00, 04:00 …)."));
             stuendlichVon = new AuswahlFeld(StundenListe) { Width = Theme.S(100) };
             stuendlichBis = new AuswahlFeld(StundenListe) { Width = Theme.S(100) };
-            felder.Controls.Add(Feld("Jede Stunde von", stuendlichVon));
+            const string stuendlich = "In diesem Zeitfenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst. Gleiche Zeit bei «von» und «bis» = kein Fenster.";
+            felder.Controls.Add(Feld("Jede Stunde von", stuendlichVon, stuendlich));
             felder.Controls.Add(Feld("bis", stuendlichBis));
             draussen = new AuswahlFeld(DraussenListe) { Width = Theme.S(190) };
-            felder.Controls.Add(Feld("Am Stück draussen", draussen));
+            felder.Controls.Add(Feld("Am Stück draussen", draussen,
+                "So lange bleibt höchstens jemand am Stück auf Posten im Freien (Schalter «Draussen» bei den Posten). Bei längeren Ablösungen tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis."));
             teams = new AuswahlFeld(TeamListe) { Width = Theme.S(190) };
-            felder.Controls.Add(Feld("Teams", teams));
+            felder.Controls.Add(Feld("Teams", teams,
+                "«Feste Zweierteams»: je zwei aufeinanderfolgende Personen der Personen-Tabelle mit gleicher Funktion und Gruppe sind immer zusammen auf dem gleichen Posten. Posten mit 2 Plätzen bekommen ein Team, einzelne Plätze eine Einzelperson."));
             var einstellungen = KarteMit(felder);
             einstellungen.Dock = DockStyle.Top;
             einstellungen.Padding = new Padding(Theme.S(18), Theme.S(14), Theme.S(18), Theme.S(10));
@@ -465,12 +481,11 @@ namespace ShiftDesk
 
             // Statuszeile mit Seitenwahl
             status = new StatusChip { Location = new Point(0, Theme.S(8)) };
-            // Hinweise erscheinen erst auf Klick auf den Status-Chip
-            status.Click += (s, e) =>
+            // Hinweise erscheinen als Popup auf Klick auf den Status-Chip
+            status.MouseDown += (s, e) =>
             {
-                if (plan == null || plan.Warnungen.Count == 0) return;
-                hinweiseOffen = !hinweiseOffen;
-                StatusAktualisieren();
+                if (e.Button != MouseButtons.Left || plan == null || plan.Warnungen.Count == 0 || Popup.GeradeGeschlossen(status)) return;
+                HinweisText.Zeigen(status, new Rectangle(0, 0, status.Width, status.Height), status, status.Text, plan.Warnungen);
             };
             lblSeite = new Label { AutoSize = false, Width = Theme.S(110), Height = Theme.S(36), TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Semibold", 9.5f) };
             btnZurueck = Knopf("", "chevron-left", () => Blaettern(-1));
@@ -537,25 +552,14 @@ namespace ShiftDesk
             };
             Thema(() => vorschau.BackColor = Theme.Hintergrund);
 
-            // Hinweise
-            lstWarnungen = new HinweisListe();
-            warnKarte = KarteMit(lstWarnungen);
-            warnKarte.Dock = DockStyle.Bottom;
-            warnKarte.Height = Theme.S(150);
-            warnKarte.Padding = new Padding(Theme.S(14), Theme.S(10), Theme.S(14), Theme.S(10));
-            warnAbstand = new Panel { Dock = DockStyle.Bottom, Height = Theme.S(14) };
-            Thema(() => warnAbstand.BackColor = Theme.Hintergrund);
-
             var koerper = new Panel { Dock = DockStyle.Fill };
             Thema(() => koerper.BackColor = Theme.Hintergrund);
             koerper.Controls.Add(vorschau);
-            koerper.Controls.Add(warnAbstand);
-            koerper.Controls.Add(warnKarte);
             koerper.Controls.Add(statuszeile);
             koerper.Controls.Add(einstellungen);
 
             return NeueSeite("Plan",
-                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante; Hinweise zeigt ein Klick auf den Status. Name, Einheit und Sprache gelten nur für den Ausdruck und ändern den Plan nicht. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. «Feste Zweierteams»: je zwei Personen (Reihenfolge der Personen-Tabelle) sind immer zusammen auf dem gleichen Posten. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
+                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante; Hinweise zeigt ein Klick auf den Status. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
                 koerper,
                 Knopf("Drucken", "printer", Drucken),
                 Knopf("Als PDF", "file-down", AlsPdf),
@@ -563,14 +567,28 @@ namespace ShiftDesk
                 Knopf("Plan erstellen", "sparkles", Erstellen, true));
         }
 
-        Control Feld(string titel, Control eingabe)
+        // Eingabe mit Beschriftung darüber; mit info steht ein Info-Knopf neben der Beschriftung
+        Control Feld(string titel, Control eingabe, string info = null)
         {
             var p = new Panel { Width = eingabe.Width, Height = Theme.S(24) + eingabe.Height, Margin = new Padding(0, 0, Theme.S(18), Theme.S(6)) };
             var l = new Label { Text = titel, AutoSize = true, Location = new Point(0, 0), Font = new Font("Segoe UI Semibold", 8.5f) };
+            if (info != null) p.Width = Math.Max(p.Width, l.PreferredWidth + Theme.S(22));
             eingabe.Location = new Point(0, Theme.S(24));
             p.Controls.Add(l);
             p.Controls.Add(eingabe);
-            Thema(() => { p.BackColor = l.BackColor = Theme.Karte; l.ForeColor = Theme.Gedaempft; });
+            InfoKnopf knopf = null;
+            if (info != null)
+            {
+                knopf = new InfoKnopf(titel, info) { Size = new Size(Theme.S(18), Theme.S(18)) };
+                knopf.Location = new Point(l.PreferredWidth + Theme.S(2), Math.Max(0, (l.PreferredHeight - knopf.Height) / 2));
+                p.Controls.Add(knopf);
+            }
+            Thema(() =>
+            {
+                p.BackColor = l.BackColor = Theme.Karte;
+                l.ForeColor = Theme.Gedaempft;
+                if (knopf != null) knopf.Invalidate();
+            });
             return p;
         }
 
@@ -633,9 +651,16 @@ namespace ShiftDesk
                 if (!benutzteTabellen.Contains(g) && g.SelectedCells.Count > 0) g.ClearSelection();
             };
             g.CellPainting += ZelleZeichnen;
+            InfoImKopf(g);
             // Spaltenbreiten selbst nach FillWeight verteilen (der eingebaute Fill-Modus verrechnet sich bei versteckten Seiten)
             g.Resize += (s, e) => SpaltenVerteilen(g);
-            g.ColumnAdded += (s, e) => SpaltenVerteilen(g);
+            g.ColumnAdded += (s, e) =>
+            {
+                // jeder Spaltentitel soll ganz Platz haben
+                int titel = TextRenderer.MeasureText(e.Column.HeaderText, g.ColumnHeadersDefaultCellStyle.Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
+                e.Column.MinimumWidth = Math.Max(e.Column.MinimumWidth, titel + Theme.S(8 + 6) + (e.Column.Tag is Color ? Theme.S(17) : 0));
+                SpaltenVerteilen(g);
+            };
             // keine Bildlaufleisten: gescrollt wird mit dem Mausrad
             g.ScrollBars = ScrollBars.None;
             g.MouseWheel += (s, e) =>
@@ -659,9 +684,22 @@ namespace ShiftDesk
             // Spalten mit fester Breite (Zeilenknöpfe) behalten ihre Breite, der Rest wird verteilt
             var spalten = g.Columns.Cast<DataGridViewColumn>().Where(c => !FesteBreite(c)).ToList();
             int verfuegbar = g.ClientSize.Width - 1 - g.Columns.Cast<DataGridViewColumn>().Where(FesteBreite).Sum(c => c.Width);
-            float summe = spalten.Sum(c => c.FillWeight);
+            // Spalten, deren Anteil unter der Mindestbreite läge, bekommen die Mindestbreite;
+            // der Rest wird unter den übrigen nach Gewicht verteilt, bis keine mehr anstösst
+            var frei = spalten.ToList();
+            bool weiter = true;
+            while (weiter && frei.Count > 0)
+            {
+                weiter = false;
+                int rest = verfuegbar - spalten.Except(frei).Sum(c => c.MinimumWidth);
+                float summe = frei.Sum(c => c.FillWeight);
+                foreach (var c in frei.ToList())
+                    if (rest * c.FillWeight / summe < c.MinimumWidth) { frei.Remove(c); weiter = true; }
+            }
+            int uebrig = verfuegbar - spalten.Except(frei).Sum(c => c.MinimumWidth);
+            float gewicht = frei.Sum(c => c.FillWeight);
             foreach (var c in spalten)
-                c.Width = Math.Max(c.MinimumWidth, (int)(verfuegbar * c.FillWeight / summe));
+                c.Width = frei.Contains(c) ? Math.Max(c.MinimumWidth, (int)(uebrig * c.FillWeight / gewicht)) : c.MinimumWidth;
         }
 
         static void GridFarben(DataGridView g)
@@ -707,8 +745,17 @@ namespace ShiftDesk
                     Formen.Fuellen(g, new RectangleF(x, r.Y + (r.Height - d) / 2f, d, d), Theme.S(3), (Color)spalte.Tag);
                     x += d + Theme.S(7);
                 }
+                int rechts = r.Right - Theme.S(4);
+                if (Erklaerung(spalte) != null)
+                {
+                    var feld = InfoFeld(grid, e.ColumnIndex, r.Size);
+                    feld.Offset(r.Location);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    InfoText.Symbol(g, feld, spalte == infoHover);
+                    rechts = feld.Left - Theme.S(2);
+                }
                 TextRenderer.DrawText(g, spalte.HeaderText, grid.ColumnHeadersDefaultCellStyle.Font,
-                    Rectangle.FromLTRB(x, r.Y, r.Right - Theme.S(4), r.Bottom), Theme.Gedaempft,
+                    Rectangle.FromLTRB(x, r.Y, rechts, r.Bottom), Theme.Gedaempft,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
                 using (var p = new Pen(Theme.Rand))
                     g.DrawLine(p, r.Left, r.Bottom - 1, r.Right, r.Bottom - 1);
@@ -727,6 +774,70 @@ namespace ShiftDesk
         }
 
         int statistikHover = -1;
+        DataGridViewColumn infoHover;   // Spalte, über deren Info-Zeichen die Maus gerade ist
+
+        static void Erklaeren(DataGridView grid, string spalte, string text)
+        {
+            var c = grid.Columns[spalte];
+            ((SpaltenInfo)c.Tag).Erklaerung = text;
+            // Titel und Info-Zeichen sollen ganz Platz haben
+            int titel = TextRenderer.MeasureText(c.HeaderText, grid.ColumnHeadersDefaultCellStyle.Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
+            c.MinimumWidth = Math.Max(c.MinimumWidth, titel + Theme.S(8 + 3 + 14 + 5));
+        }
+
+        static string Erklaerung(DataGridViewColumn spalte)
+        {
+            var info = spalte.Tag as SpaltenInfo;
+            return info != null ? info.Erklaerung : null;
+        }
+
+        // Info-Zeichen im Spaltenkopf, gleich hinter dem Titel (relativ zur Kopfzelle)
+        static Rectangle InfoFeld(DataGridView grid, int spalte, Size zelle)
+        {
+            var c = grid.Columns[spalte];
+            int x = Theme.S(8) + (c.Tag is Color ? Theme.S(17) : 0);
+            int tw = TextRenderer.MeasureText(c.HeaderText, grid.ColumnHeadersDefaultCellStyle.Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
+            int d = Theme.S(14);
+            int ix = Math.Max(x, Math.Min(x + tw + Theme.S(3), zelle.Width - d - Theme.S(4)));
+            return new Rectangle(ix, (zelle.Height - d) / 2, d, d);
+        }
+
+        void InfoImKopf(DataGridView grid)
+        {
+            Func<DataGridViewCellMouseEventArgs, bool> drauf = e =>
+            {
+                if (e.RowIndex != -1 || e.ColumnIndex < 0 || Erklaerung(grid.Columns[e.ColumnIndex]) == null) return false;
+                var zelle = grid.GetCellDisplayRectangle(e.ColumnIndex, -1, false);
+                return Rectangle.Inflate(InfoFeld(grid, e.ColumnIndex, zelle.Size), Theme.S(3), Theme.S(3)).Contains(e.Location);
+            };
+            grid.CellMouseMove += (s, e) =>
+            {
+                if (e.RowIndex != -1) return;
+                var neu = drauf(e) ? grid.Columns[e.ColumnIndex] : null;
+                grid.Cursor = neu != null ? Cursors.Hand : Cursors.Default;
+                if (neu == infoHover) return;
+                if (infoHover != null && infoHover.DataGridView == grid) grid.InvalidateCell(infoHover.Index, -1);
+                infoHover = neu;
+                if (neu != null) grid.InvalidateCell(neu.Index, -1);
+            };
+            grid.CellMouseLeave += (s, e) =>
+            {
+                if (e.RowIndex != -1 || infoHover == null) return;
+                if (infoHover.DataGridView == grid) grid.InvalidateCell(infoHover.Index, -1);
+                infoHover = null;
+                grid.Cursor = Cursors.Default;
+            };
+            grid.CellMouseDown += (s, e) =>
+            {
+                if (e.Button != MouseButtons.Left || !drauf(e)) return;
+                var spalte = grid.Columns[e.ColumnIndex];
+                if (Popup.GeradeGeschlossen(spalte)) return;
+                var zelle = grid.GetCellDisplayRectangle(e.ColumnIndex, -1, false);
+                var feld = InfoFeld(grid, e.ColumnIndex, zelle.Size);
+                feld.Offset(zelle.Location);
+                InfoText.Zeigen(grid, feld, spalte, spalte.HeaderText, Erklaerung(spalte));
+            };
+        }
 
         // mindestens: eigene Mindestbreite (0 = nach Spaltenart)
         static DataGridViewTextBoxColumn Spalte(string name, string titel, int gewicht, SpaltenInfo info, int mindestens = 0)
@@ -874,8 +985,9 @@ namespace ShiftDesk
             raster.Controls.Add(links, 0, 0);
             raster.Controls.Add(rechts, 1, 0);
             Thema(() => raster.BackColor = Theme.Hintergrund);
+            Erklaeren(gridFunktionen, "ImPlan", "Aus = Personen mit dieser Funktion werden nicht eingeteilt und stehen nur unten auf dem Plan bei «Nicht eingeteilt» (z. B. Reserve).");
             return NeueSeite("Funktionen & Grade",
-                "Lege hier fest, welche Funktionen und Grade es gibt. Bei den Personen wählst du sie dann nur noch aus. «Im Plan einteilen» aus = erscheint nicht im Plan (z. B. Reserve). Die Reihenfolge der Funktionen ist die Reihenfolge im Plan.",
+                "Lege hier fest, welche Funktionen und Grade es gibt. Bei den Personen wählst du sie dann nur noch aus. Die Reihenfolge der Funktionen ist die Reihenfolge im Plan.",
                 raster);
         }
 
@@ -995,7 +1107,6 @@ namespace ShiftDesk
             seite = 0;
             benutzteTabellen.Clear();
             foreach (var t in tabellen) { t.ClearSelection(); t.CurrentCell = null; }   // keine automatisch ausgewählte erste Zeile
-            lstWarnungen.Setzen(new string[0]);
             gridStatistik.Columns.Clear();
             StatusAktualisieren();
             Titel();
@@ -1160,8 +1271,6 @@ namespace ShiftDesk
                 return;
             }
             seite = 0;
-            lstWarnungen.Setzen(plan.Warnungen);
-            hinweiseOffen = false;   // Hinweise sind zugeklappt, bis man auf den Status-Chip klickt
             StatistikAnzeigen();
             StatusAktualisieren();
         }
@@ -1186,13 +1295,12 @@ namespace ShiftDesk
         void StatusAktualisieren()
         {
             bool hinweise = plan != null && plan.Warnungen.Count > 0;
-            warnKarte.Visible = warnAbstand.Visible = hinweise && hinweiseOffen;
             if (plan == null)
                 status.Setzen("", "circle-check", Theme.Erfolg);
             else if (hinweise)
-                status.Setzen(plan.Warnungen.Count == 1 ? "1 Hinweis" : plan.Warnungen.Count + " Hinweise", "triangle-alert", Theme.Warnung, true, hinweiseOffen);
+                status.Setzen(plan.Warnungen.Count == 1 ? "1 Hinweis" : plan.Warnungen.Count + " Hinweise", "triangle-alert", Theme.Warnung, true);
             else
-                status.Setzen(plan.Cfg.Essenszeiten.Count > 0 ? "Alle Posten besetzt, alle haben Essen" : "Alle Posten besetzt", "circle-check", Theme.Erfolg);
+                status.Setzen("Alle Posten besetzt", "circle-check", Theme.Erfolg);
             lblSeite.Text = plan == null ? "" : "Seite " + (seite + 1) + " / " + plan.Seiten;
             btnZurueck.Visible = btnVor.Visible = plan != null && plan.Seiten > 1;
             lblSeite.Visible = plan != null;
