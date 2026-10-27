@@ -74,6 +74,11 @@ namespace ShiftDesk
         ZoomPanel vorschau;
         Label lblZoom, lblSeite;
         ModernButton btnEinpassen, btnZurueck, btnVor;
+        ModernButton[] ausgabe;   // Drucken, Als PDF, Excel
+        Trenner trennerAnsicht, trennerSeite;
+        Karte werkzeugleiste;
+        Panel werkzeuge;
+        Control[] werkzeugReihe;   // Reihenfolge in der Werkzeugleiste
         StatusChip status;
         float zoom = 1f;
         PointF verschiebung, verschiebungStart;
@@ -649,33 +654,35 @@ namespace ShiftDesk
                 status.Offen = true;
                 popup.Closed += (o, a) => status.Offen = false;
             };
+            // Werkzeugleiste über der Vorschau: links der Status, rechts die Gruppen Ansicht | Seite | Ausgabe
+            lblZoom = new Label { AutoSize = false, Width = Theme.S(84), Height = Theme.KnopfHoehe, TextAlign = ContentAlignment.MiddleCenter, Font = Schrift.Fett, Margin = new Padding(Theme.S(4), 0, 0, 0) };
+            btnEinpassen = Knopf("", "maximize", Einpassen);
+            btnEinpassen.Tipp = "Ganze Seite zeigen";
             lblSeite = new Label { AutoSize = false, Width = Theme.S(110), Height = Theme.KnopfHoehe, TextAlign = ContentAlignment.MiddleCenter, Font = Schrift.Fett, Margin = new Padding(Theme.S(4), 0, 0, 0) };
             btnZurueck = Knopf("", "chevron-left", () => Blaettern(-1));
             btnZurueck.Tipp = "Vorherige Seite";
             btnVor = Knopf("", "chevron-right", () => Blaettern(1));
             btnVor.Tipp = "Nächste Seite";
-            var seitenwahl = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false };
-            seitenwahl.Controls.Add(btnZurueck);
-            seitenwahl.Controls.Add(lblSeite);
-            seitenwahl.Controls.Add(btnVor);
+            ausgabe = new[] { Knopf("Drucken", "printer", Drucken), Knopf("Als PDF", "file-down", AlsPdf), Knopf("Excel", "file-spreadsheet", AlsExcel) };
+            trennerAnsicht = new Trenner();
+            trennerSeite = new Trenner();
+            werkzeuge = new Panel { Dock = DockStyle.Right };
+            werkzeugReihe = new Control[] { lblZoom, btnEinpassen, trennerAnsicht, btnZurueck, lblSeite, btnVor, trennerSeite }.Concat(ausgabe).ToArray();
+            werkzeuge.Controls.AddRange(werkzeugReihe);
 
-            lblZoom = new Label { AutoSize = false, Width = Theme.S(84), Height = Theme.KnopfHoehe, TextAlign = ContentAlignment.MiddleCenter, Font = Schrift.Fett, Margin = new Padding(Theme.S(4), 0, 0, 0) };
-            btnEinpassen = Knopf("", "maximize", Einpassen);
-            btnEinpassen.Tipp = "Ganze Seite zeigen";
-            var zoomwahl = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, Padding = new Padding(0, 0, Theme.S(20), 0) };
-            zoomwahl.Controls.Add(lblZoom);
-            zoomwahl.Controls.Add(btnEinpassen);
-
-            var statuszeile = new Panel { Dock = DockStyle.Top, Height = Theme.S(52), Padding = new Padding(0, Theme.S(8), 0, Theme.S(8)) };
-            statuszeile.Controls.Add(status);
-            statuszeile.Controls.Add(zoomwahl);
-            statuszeile.Controls.Add(seitenwahl);
-            // wird es eng, verschwindet zuerst die Zoom-Anzeige
-            statuszeile.Resize += (s, e) => ZoomAnzeigen();
+            werkzeugleiste = new Karte { Dock = DockStyle.Top, Height = Theme.KnopfHoehe + Theme.S(20), Padding = new Padding(Theme.S(14), Theme.S(10), Theme.S(10), Theme.S(10)) };
+            status.Location = new Point(Theme.S(14), (werkzeugleiste.Height - status.Height) / 2);
+            werkzeugleiste.Controls.Add(status);
+            werkzeugleiste.Controls.Add(werkzeuge);
+            // wird es eng, verschwindet zuerst die Zoom-Anzeige, dann zeigen die Ausgabe-Knöpfe nur ihr Symbol
+            werkzeugleiste.Resize += (s, e) => ZoomAnzeigen();
+            var leisteAbstand = new Panel { Dock = DockStyle.Top, Height = Theme.S(12) };
             Thema(() =>
             {
-                statuszeile.BackColor = seitenwahl.BackColor = zoomwahl.BackColor = lblSeite.BackColor = lblZoom.BackColor = Theme.Hintergrund;
+                werkzeuge.BackColor = lblSeite.BackColor = lblZoom.BackColor = Theme.Karte;
                 lblSeite.ForeColor = lblZoom.ForeColor = Theme.Text;
+                leisteAbstand.BackColor = Theme.Hintergrund;
+                werkzeugleiste.Invalidate(true);
             });
 
             // Vorschau: Mausrad zoomt, Ziehen verschiebt, Doppelklick zoomt hinein bzw. passt ein
@@ -723,7 +730,8 @@ namespace ShiftDesk
 
             planRechts = new Panel();
             planRechts.Controls.Add(vorschau);
-            planRechts.Controls.Add(statuszeile);
+            planRechts.Controls.Add(leisteAbstand);
+            planRechts.Controls.Add(werkzeugleiste);
             planKoerper = new Panel { Dock = DockStyle.Fill };
             planKoerper.Controls.Add(einstellungen);
             planKoerper.Controls.Add(planRechts);
@@ -733,9 +741,6 @@ namespace ShiftDesk
             return NeueSeite("Plan",
                 "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante; Hinweise zeigt ein Klick auf den Status. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
                 planKoerper,
-                Knopf("Drucken", "printer", Drucken),
-                Knopf("Als PDF", "file-down", AlsPdf),
-                Knopf("Excel", "file-spreadsheet", AlsExcel),
                 Knopf("Plan erstellen", "sparkles", Erstellen, true));
         }
 
@@ -1145,8 +1150,6 @@ namespace ShiftDesk
             else
                 status.Setzen("Alle Posten besetzt", "circle-check", Theme.Erfolg);
             lblSeite.Text = plan == null ? "" : "Seite " + (seite + 1) + " / " + plan.Seiten;
-            btnZurueck.Visible = btnVor.Visible = plan != null && plan.Seiten > 1;
-            lblSeite.Visible = plan != null;
             btnZurueck.Enabled = seite > 0;
             btnVor.Enabled = plan != null && seite < plan.Seiten - 1;
             if (plan == null)
@@ -1305,14 +1308,40 @@ namespace ShiftDesk
         void ZoomAnzeigen()
         {
             bool sichtbar = plan != null;
-            btnEinpassen.Visible = sichtbar;
-            // die Beschriftung nur, wenn neben Status und Seitenwahl Platz ist
-            var zeile = lblZoom.Parent == null ? null : lblZoom.Parent.Parent;
-            int noetig = status.Width + lblZoom.Width + btnEinpassen.Width + Theme.S(20 + 24)
-                + (btnVor.Visible ? lblSeite.Width + lblSeite.Margin.Horizontal + 2 * (btnVor.Width + btnVor.Margin.Horizontal) : 0);
-            lblZoom.Visible = sichtbar && (zeile == null || zeile.Width >= noetig);
+            bool blaettern = sichtbar && plan.Seiten > 1;
+            foreach (var k in ausgabe) k.Enabled = sichtbar;
+            // Platz der Leiste: erst fällt die Zoom-Beschriftung weg, dann zeigen die Ausgabe-Knöpfe nur ihr Symbol
+            Func<Control, int> breite = c => c.Width + c.Margin.Horizontal;
+            int fest = Theme.S(14 + 10 + 16) + status.Width
+                + (sichtbar ? breite(btnEinpassen) + breite(trennerAnsicht) + breite(trennerSeite) + breite(lblSeite) : 0)
+                + (blaettern ? breite(btnZurueck) + breite(btnVor) : 0);
+            int ausgabeVoll = ausgabe.Sum(k => k.VolleBreite + k.Margin.Horizontal);
+            int platz = werkzeugleiste.Width;
+            bool mitZoom = sichtbar && platz >= fest + breite(lblZoom) + ausgabeVoll;
+            bool kompakt = platz < fest + (mitZoom ? breite(lblZoom) : 0) + ausgabeVoll;
+            foreach (var k in ausgabe) k.Kompakt = kompakt;
             lblZoom.Text = zoom <= 1.001f ? "Ganze Seite" : Math.Round(zoom * 100) + " %";
             btnEinpassen.Enabled = zoom > 1.001f;
+
+            // Werkzeugleiste selbst anordnen (ein FlowLayoutPanel bringt die Reihenfolge durcheinander,
+            // wenn Steuerelemente erst später sichtbar werden)
+            var zeigen = new Dictionary<Control, bool>
+            {
+                { lblZoom, mitZoom }, { btnEinpassen, sichtbar }, { trennerAnsicht, sichtbar },
+                { btnZurueck, blaettern }, { lblSeite, sichtbar }, { btnVor, blaettern }, { trennerSeite, sichtbar },
+            };
+            int x = 0;
+            foreach (var c in werkzeugReihe)
+            {
+                bool an;
+                if (!zeigen.TryGetValue(c, out an)) an = true;
+                c.Visible = an;
+                if (!an) continue;
+                x += c.Margin.Left;
+                c.Location = new Point(x, (werkzeuge.Height - c.Height) / 2);
+                x += c.Width + c.Margin.Right;
+            }
+            werkzeuge.Width = x;
             vorschau.Cursor = sichtbar && zoom > 1 ? (ziehen ? Cursors.SizeAll : Cursors.Hand) : Cursors.Default;
         }
 

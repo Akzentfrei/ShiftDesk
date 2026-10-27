@@ -623,6 +623,24 @@ namespace ShiftDesk
         }
     }
 
+    // Senkrechter Strich zwischen Gruppen einer Werkzeugleiste
+    public class Trenner : ThemaControl
+    {
+        public Trenner()
+        {
+            Size = new Size(Theme.S(17), Theme.KnopfHoehe);
+            Margin = new Padding(Theme.S(4), 0, 0, 0);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(Untergrund);
+            int x = Width / 2, rand = Theme.S(6);
+            using (var p = new Pen(Theme.Rand))
+                e.Graphics.DrawLine(p, x, rand, x, Height - rand);
+        }
+    }
+
     // Kleines farbiges Status-Etikett mit Icon; klickbar = klappt etwas auf (Pfeil rechts)
     public class StatusChip : ThemaControl
     {
