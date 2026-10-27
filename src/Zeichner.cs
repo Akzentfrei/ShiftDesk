@@ -8,17 +8,53 @@ using System.Linq;
 
 namespace ShiftDesk
 {
+    // Texte des Ausdrucks in einer Sprache. Namen von Posten, Funktionen und Personen bleiben, wie sie erfasst sind.
+    public class Druck
+    {
+        public string Kuerzel, Name;
+        public CultureInfo Kultur;
+        public string DatumLang;
+        public string Titel, Einheit, Fuer, Datum, Legende, Zeit, Wer;
+        public string Ruhezeit, OhnePosten, Essen, Draussen, Fahrer, NichtEingeteilt, Erstellt, Seite;
+
+        public static readonly Druck[] Sprachen =
+        {
+            new Druck { Kuerzel = "de", Name = "Deutsch", Kultur = new CultureInfo("de-CH"), DatumLang = "dddd, dd.MM.yyyy",
+                Titel = "Ablösungsliste", Einheit = "Einheit", Fuer = "Für", Datum = "Datum", Legende = "Legende", Zeit = "Zeit", Wer = "Wer",
+                Ruhezeit = "Ruhezeit", OhnePosten = "ohne Posten", Essen = "Essen (oben links: vor der Ablösung, oben rechts: danach)", Draussen = "Draussen", Fahrer = "Fahrer",
+                NichtEingeteilt = "Nicht eingeteilt", Erstellt = "Erstellt mit ShiftDesk am {0}", Seite = "Seite {0} von {1}" },
+            new Druck { Kuerzel = "fr", Name = "Français", Kultur = new CultureInfo("fr-CH"), DatumLang = "dddd dd.MM.yyyy",
+                Titel = "Liste de relève", Einheit = "Unité", Fuer = "Pour", Datum = "Date", Legende = "Légende", Zeit = "Heure", Wer = "Qui",
+                Ruhezeit = "Repos", OhnePosten = "sans poste", Essen = "Repas (en haut à gauche : avant la relève, à droite : après)", Draussen = "À l'extérieur", Fahrer = "Chauffeur",
+                NichtEingeteilt = "Non engagés", Erstellt = "Créé avec ShiftDesk le {0}", Seite = "Page {0} sur {1}" },
+            new Druck { Kuerzel = "it", Name = "Italiano", Kultur = new CultureInfo("it-CH"), DatumLang = "dddd dd.MM.yyyy",
+                Titel = "Lista dei turni", Einheit = "Unità", Fuer = "Per", Datum = "Data", Legende = "Legenda", Zeit = "Ora", Wer = "Chi",
+                Ruhezeit = "Riposo", OhnePosten = "senza posto", Essen = "Pasto (in alto a sinistra: prima del cambio, a destra: dopo)", Draussen = "All'esterno", Fahrer = "Autista",
+                NichtEingeteilt = "Non impiegati", Erstellt = "Creato con ShiftDesk il {0}", Seite = "Pagina {0} di {1}" },
+            new Druck { Kuerzel = "en", Name = "English", Kultur = new CultureInfo("en-GB"), DatumLang = "dddd, dd.MM.yyyy",
+                Titel = "Relief Roster", Einheit = "Unit", Fuer = "For", Datum = "Date", Legende = "Legend", Zeit = "Time", Wer = "Who",
+                Ruhezeit = "Rest", OhnePosten = "no post", Essen = "Meal (top left: before the relief, top right: after)", Draussen = "Outdoors", Fahrer = "Driver",
+                NichtEingeteilt = "Not assigned", Erstellt = "Created with ShiftDesk on {0}", Seite = "Page {0} of {1}" },
+        };
+
+        public static Druck In(string kuerzel)
+        {
+            return Sprachen.FirstOrDefault(s => s.Kuerzel == kuerzel) ?? Sprachen[0];
+        }
+    }
+
     // Zeichnet eine Seite (24 Stunden) des Plans, für Vorschau und Drucker gleich. Immer hell (Papier).
+    // Aufbau nach dem Formular «Ablösungsliste»: Kopf mit Feldern und Legende, Tabelle mit Rahmen,
+    // Stunden auf den Linien, Posten als Buchstaben auf hellen Farben, «-» für Ruhe.
     public static class Zeichner
     {
-        static readonly CultureInfo De = new CultureInfo("de-CH");
-        const string Schrift = "Segoe UI";
-        const string SchriftFett = "Segoe UI Semibold";
+        const string Schrift = "Arial";
 
-        static readonly Color TextFarbe = Color.FromArgb(17, 24, 39);
-        static readonly Color Grau = Color.FromArgb(107, 114, 128);
-        static readonly Color HellGrau = Color.FromArgb(156, 163, 175);
-        static readonly Color Linie = Color.FromArgb(229, 231, 235);
+        static readonly Color TextFarbe = Color.FromArgb(17, 17, 17);
+        static readonly Color Grau = Color.FromArgb(90, 90, 90);
+        static readonly Color HellGrau = Color.FromArgb(150, 150, 150);
+        static readonly Color Rahmen = Color.FromArgb(34, 34, 34);
+        static readonly Color Gitter = Color.FromArgb(200, 200, 200);
         static readonly Color Leer = Color.FromArgb(243, 244, 246);
         static readonly Color Schnee = Color.FromArgb(37, 99, 235);
 
@@ -27,6 +63,7 @@ namespace ShiftDesk
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
             var cfg = plan.Cfg;
+            var t = Druck.In(cfg.Sprache);
             float u = b.Width / 1000f;
 
             int erste = seite * 24;
@@ -35,233 +72,315 @@ namespace ShiftDesk
             DateTime bis = von.AddHours(stunden);
 
             var links = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+            var rechtsMitte = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
             var mitte = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
-            var rechts = new StringFormat { Alignment = StringAlignment.Far };
 
             using (var tText = new SolidBrush(TextFarbe))
             using (var tGrau = new SolidBrush(Grau))
             using (var tHell = new SolidBrush(HellGrau))
-            using (var linie = new Pen(Linie, u * 0.8f))
-            using (var fTitel = new Font(SchriftFett, 20 * u, GraphicsUnit.World))
-            using (var fUnter = new Font(Schrift, 9.5f * u, GraphicsUnit.World))
-            using (var fFett = new Font(SchriftFett, 9.5f * u, GraphicsUnit.World))
+            using (var dick = new Pen(Rahmen, u * 1.3f))
+            using (var duenn = new Pen(Rahmen, u * 0.6f))
+            using (var gitter = new Pen(Gitter, u * 0.5f))
+            using (var fTitel = new Font(Schrift, 19 * u, FontStyle.Bold, GraphicsUnit.World))
+            using (var fFeld = new Font(Schrift, 9.5f * u, GraphicsUnit.World))
+            using (var fWert = new Font(Schrift, 10.5f * u, GraphicsUnit.World))
+            using (var fKopf = new Font(Schrift, 9.5f * u, FontStyle.Bold, GraphicsUnit.World))
+            using (var fStunde = new Font(Schrift, 8.5f * u, FontStyle.Bold, GraphicsUnit.World))
             using (var fKlein = new Font(Schrift, 8 * u, GraphicsUnit.World))
-            using (var fKleinFett = new Font(SchriftFett, 8 * u, GraphicsUnit.World))
+            using (var fKleinFett = new Font(Schrift, 8 * u, FontStyle.Bold, GraphicsUnit.World))
             {
-                // Kopf
-                g.DrawString("Wachtablösungsliste", fTitel, tText, b.Left - 1.5f * u, b.Top);
-                string unter = cfg.Name ?? "";
-                if (unter != "") g.DrawString(unter, fUnter, tGrau, b.Left, b.Top + 29 * u);
-                g.DrawString(von.ToString("ddd dd.MM.yyyy HH:00", De) + "  –  " + bis.ToString("ddd dd.MM.yyyy HH:00", De),
-                    fFett, tText, b.Right, b.Top + 6 * u, rechts);
-                if (plan.Seiten > 1)
-                    g.DrawString("Seite " + (seite + 1) + " von " + plan.Seiten, fKlein, tGrau, b.Right, b.Top + 22 * u, rechts);
-
-                // Masse
-                var balken = Enumerable.Range(0, cfg.Posten.Count)
-                    .Where(k => !cfg.Posten[k].Durchgehend && cfg.Posten[k].Typ != PostenTyp.Auffang).ToList();
-                float balkenH = 14 * u, legendeH = 16 * u, fussH = 12 * u;
-                float reserveH = plan.NichtEingeteilt.Count > 0 ? 18 * u : 0;
-                float fuss = (balken.Count > 0 ? balken.Count * balkenH + 12 * u : 0) + 14 * u + legendeH + reserveH + fussH;
-                float oben = b.Top + 60 * u;
-                float gradW = 40 * u, nameW = 126 * u;
+                float gradW = 40 * u, nameW = 140 * u;
                 float xs = b.Left + gradW + nameW;
-                float spalteW = (b.Right - xs) / 24f;
-                float datumH = 15 * u, stundeH = 18 * u, lueckeH = 10 * u;
-                int n = plan.Zeilen.Count;
-                int bloecke = n == 0 ? 0 : plan.Block[n - 1];
-                float platz = b.Bottom - fuss - oben - datumH - stundeH - bloecke * lueckeH;
-                float zeileH = Math.Min(25 * u, platz / Math.Max(1, n));
-                float kopfY = oben + datumH;
-                Func<int, float> zeileY = r => kopfY + stundeH + r * zeileH + plan.Block[r] * lueckeH;
-                Func<int, float> spalteX = c => xs + c * spalteW;
-                float tabUnten = zeileY(n - 1) + zeileH;
-                float spalt = Math.Max(0.8f * u, Math.Min(spalteW, zeileH) * 0.07f);
-                float radius = 2.2f * u;
+                float rasterW = b.Right - xs;
+                float spalteW = rasterW / 24f;
 
-                // Spaltenköpfe
-                g.DrawString("Grad", fKleinFett, tGrau, new RectangleF(b.Left, kopfY, gradW, stundeH), links);
-                g.DrawString("Name", fKleinFett, tGrau, new RectangleF(b.Left + gradW, kopfY, nameW, stundeH), links);
-                for (int c = 0; c < stunden; c++)
+                // Logo oben links, darunter der Titel; Felder und Legende über dem Raster
+                float oben = b.Top;
+                var logo = ArmeeLogo;
+                if (logo != null)
+                {
+                    float lh = 30 * u;
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(logo, new RectangleF(b.Left, b.Top, lh * logo.Width / logo.Height, lh));
+                    oben += lh + 12 * u;
+                }
+                g.DrawString(t.Titel, fTitel, tText, b.Left - 1.5f * u, oben - 2 * u);
+                float fx0 = Math.Max(xs, b.Left + g.MeasureString(t.Titel, fTitel).Width + 10 * u);
+                float feldW = b.Right - fx0;
+
+                float feldH = 22 * u;
+                string datum = von.Hour == 0 && stunden == 24
+                    ? von.ToString(t.DatumLang, t.Kultur)
+                    : von.ToString("ddd dd.MM.yyyy HH:00", t.Kultur) + " – " + bis.ToString("ddd dd.MM.yyyy HH:00", t.Kultur);
+                var felder = new[]
+                {
+                    new { Name = t.Einheit, Wert = cfg.Einheit ?? "", X = 0f, W = 0.28f },
+                    new { Name = t.Fuer, Wert = cfg.Name ?? "", X = 0.28f, W = 0.32f },
+                    new { Name = t.Datum, Wert = datum, X = 0.60f, W = 0.40f },
+                };
+                float labelW = felder.Max(f => g.MeasureString(f.Name, fFeld).Width) + 8 * u;
+                foreach (var f in felder)
+                {
+                    float fx = fx0 + f.X * feldW;
+                    g.DrawString(f.Name, fFeld, tText, new RectangleF(fx, oben, labelW, feldH), links);
+                    g.DrawString(f.Wert, fWert, tText, new RectangleF(fx + labelW, oben, f.W * feldW - labelW - 4 * u, feldH), links);
+                }
+                g.DrawLine(duenn, fx0, oben + feldH, b.Right, oben + feldH);
+
+                // Legende: Posten mit Buchstaben, spaltenweise wie im Formular
+                int pn = cfg.Posten.Count;
+                int lSpalten = pn <= 9 ? 3 : pn <= 16 ? 4 : 5;
+                int lZeilen = Math.Max(1, (pn + lSpalten - 1) / lSpalten);
+                float lZeileH = 12.5f * u, q = 10 * u;
+                float ly = oben + feldH + 5 * u;
+                float lx0 = fx0 + Math.Max(labelW, g.MeasureString(t.Legende, fFeld).Width + 8 * u);
+                float lSpalteW = (b.Right - lx0) / lSpalten;
+                g.DrawString(t.Legende, fFeld, tText, new RectangleF(fx0, ly, lx0 - fx0, lZeileH), links);
+                for (int k = 0; k < pn; k++)
+                {
+                    var posten = cfg.Posten[k];
+                    float x = lx0 + (k / lZeilen) * lSpalteW, y = ly + (k % lZeilen) * lZeileH;
+                    var feld = new RectangleF(x, y + (lZeileH - q) / 2, q, q);
+                    using (var f = new SolidBrush(Pastell(posten.Farbe))) g.FillRectangle(f, feld);
+                    g.DrawString(Kuerzel(k), fKleinFett, tText, feld, mitte);
+                    float tx = x + q + 4 * u, rest = lSpalteW - q - 8 * u;
+                    float w = Math.Min(rest, g.MeasureString(posten.Name, fFeld).Width);
+                    g.DrawString(posten.Name, fFeld, tText, new RectangleF(tx, y, w + 2 * u, lZeileH), links);
+                    tx += w;
+                    if (posten.Draussen && rest - w > q)
+                    {
+                        SchneeSymbol(g, new RectangleF(tx + 2 * u, y + (lZeileH - 9 * u) / 2, 9 * u, 9 * u));
+                        tx += 11 * u;
+                    }
+                    if (!posten.Durchgehend)
+                        g.DrawString(Zeit.Text(posten.OffenVon) + "–" + Zeit.Text(posten.OffenBis), fKlein, tGrau,
+                            new RectangleF(tx + 3 * u, y, Math.Max(0, x + lSpalteW - tx - 7 * u), lZeileH), links);
+                }
+                float kopfUnten = ly + lZeilen * lZeileH + 4 * u;
+                g.DrawLine(duenn, fx0, kopfUnten, b.Right, kopfUnten);
+
+                // Masse der Tabelle
+                int n = plan.Zeilen.Count;
+                bool frei = Enumerable.Range(0, n).Any(r => Enumerable.Range(0, stunden).Any(c => plan.Z[r, erste + c] == Plan.FREI));
+                float zeichenH = 12 * u;
+                float neH = plan.NichtEingeteilt.Count > 0 ? zeichenH : 0;
+                float fussH = 12 * u;
+                float fuss = 5 * u + zeichenH + neH + 4 * u + fussH;
+                float tabOben = Math.Max(kopfUnten, oben + 30 * u) + 12 * u;
+                float stundeH = 30 * u;
+                float kopfY = tabOben + stundeH;
+                float zeileH = Math.Min(30 * u, (b.Bottom - fuss - kopfY) / Math.Max(1, n));
+                Func<int, float> zeileY = r => kopfY + r * zeileH;
+                Func<int, float> spalteX = c => xs + c * spalteW;
+                float tabUnten = zeileY(n);
+
+                // Tabellenkopf: Diagonale mit «Zeit» und «Wer», Stunden senkrecht auf den Linien
+                g.DrawLine(duenn, b.Left, tabOben, xs, kopfY);
+                g.DrawString(t.Zeit, fKopf, tText, new RectangleF(b.Left, tabOben + 2 * u, xs - b.Left - 5 * u, 14 * u), rechtsMitte);
+                g.DrawString(t.Wer, fKopf, tText, new RectangleF(b.Left + 4 * u, kopfY - 15 * u, gradW + nameW, 14 * u), links);
+                var stundeTh = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
+                for (int c = 0; c <= stunden; c++)
                 {
                     DateTime z = von.AddHours(c);
-                    g.DrawString(z.ToString("HH:00"), fKlein, tGrau, new RectangleF(spalteX(c), kopfY, spalteW, stundeH), mitte);
-                    if (c == 0 || z.Hour == 0)
-                        g.DrawString(z.ToString("dddd, dd.MM.yyyy", De), fKleinFett, tText, spalteX(c) + spalt, oben);
+                    string text = c == stunden && c > 0 && z.Hour == 0 ? "2400" : z.ToString("HHmm");
+                    var alt = g.Transform;
+                    g.TranslateTransform(spalteX(c), kopfY - 3 * u);
+                    g.RotateTransform(-90);
+                    g.DrawString(text, fStunde, tText, new RectangleF(0, -6 * u, stundeH, 12 * u), stundeTh);
+                    g.Transform = alt;
                 }
-                g.DrawLine(linie, b.Left, kopfY + stundeH, b.Right, kopfY + stundeH);
 
-                using (var fName = new Font(Schrift, Math.Min(10 * u, zeileH * 0.46f), GraphicsUnit.World))
+                using (var fName = new Font(Schrift, Math.Min(9.5f * u, zeileH * 0.44f), FontStyle.Bold, GraphicsUnit.World))
+                using (var fGrad = new Font(Schrift, Math.Min(9.5f * u, zeileH * 0.44f), GraphicsUnit.World))
+                using (var fZeichen = new Font(Schrift, Math.Min(Math.Min(11 * u, zeileH * 0.46f), spalteW * 0.42f), FontStyle.Bold, GraphicsUnit.World))
                 {
-                    // Namen und Posten-Kacheln
                     for (int r = 0; r < n; r++)
                     {
                         float zy = zeileY(r);
                         var p = plan.Zeilen[r];
-                        g.DrawString(p.Grad, fName, tGrau, new RectangleF(b.Left, zy, gradW, zeileH), links);
-                        g.DrawString(p.Name, fName, tText, new RectangleF(b.Left + gradW, zy, nameW - 4 * u, zeileH), links);
+                        g.DrawString(p.Grad, fGrad, tText, new RectangleF(b.Left + 4 * u, zy, gradW - 6 * u, zeileH), links);
+                        var nameFeld = new RectangleF(b.Left + gradW + 4 * u, zy, nameW - 9 * u, zeileH);
+                        g.DrawString(p.Name, fName, tText, nameFeld, rechtsMitte);
                         if (p.Fahrer)
                         {
                             float ik = Math.Min(zeileH * 0.62f, 12 * u);
-                            float nw = Math.Min(nameW - 6 * u - ik, g.MeasureString(p.Name, fName).Width);
-                            AutoSymbol(g, new RectangleF(b.Left + gradW + nw + 3 * u, zy + (zeileH - ik) / 2, ik, ik));
+                            float nw = Math.Min(nameFeld.Width - ik - 3 * u, g.MeasureString(p.Name, fName).Width);
+                            AutoSymbol(g, new RectangleF(nameFeld.Right - nw - ik - 3 * u, zy + (zeileH - ik) / 2, ik, ik));
                         }
-                        // Trennlinie zwischen den Zeilen; Mitglieder eines festen Teams bleiben ohne Linie zusammen
-                        if (r < n - 1 && plan.Block[r + 1] == plan.Block[r] && plan.Team[r + 1] != plan.Team[r])
-                            g.DrawLine(linie, b.Left, zy + zeileH, xs - spalt, zy + zeileH);
+
+                        // Posten pro Ablösung als ein Feld (Spalten feldA bis feldE), Ruhe und Freizeit Stunde für Stunde
+                        var feldA = new int[stunden];
+                        var feldE = new int[stunden];
+                        for (int c0 = 0, c1; c0 < stunden; c0 = c1 + 1)
+                        {
+                            int k = plan.Z[r, erste + c0];
+                            c1 = c0;
+                            if (k >= 0)
+                                while (c1 + 1 < stunden && plan.Z[r, erste + c1 + 1] == k && !NeueAbloesung(cfg, von.AddHours(c1 + 1).Hour))
+                                    c1++;
+                            for (int c = c0; c <= c1; c++) { feldA[c] = c0; feldE[c] = c1; }
+                        }
+                        Func<int, bool> posten = c => c >= 0 && c < stunden && plan.Z[r, erste + c] >= 0;
+                        Func<int, RectangleF> feldVon = c => RectangleF.FromLTRB(spalteX(feldA[c]), zy, spalteX(feldE[c] + 1), zy + zeileH);
+
+                        // Essen als Zeichen in der Ecke eines Postenfelds: oben links = vor der Ablösung essen,
+                        // oben rechts = nach der Ablösung; mitten in der Ruhezeit gross in der Stunde
+                        var essenLinks = new List<RectangleF>();
+                        var essenRechts = new List<RectangleF>();
+                        var essenMitte = new bool[stunden];
                         for (int c = 0; c < stunden; c++)
                         {
-                            var kachel = new RectangleF(spalteX(c) + spalt / 2, zy + spalt / 2, spalteW - spalt, zeileH - spalt);
-                            int k = plan.Z[r, erste + c];
-                            if (k == Plan.RUHE) continue;
-                            Formen.Fuellen(g, kachel, radius, k >= 0 ? Color.FromArgb(cfg.Posten[k].Farbe) : Leer);
-                            if (plan.Essen[r, erste + c])
-                                EssenSymbol(g, kachel);
-                        }
-                    }
-
-                    // Ruhezeiten als zusammenhängende Blöcke pro Gruppe
-                    int r0 = 0;
-                    while (r0 < n)
-                    {
-                        int r1 = r0;
-                        while (r1 + 1 < n && plan.Block[r1 + 1] == plan.Block[r0] && plan.Zeilen[r1 + 1].Gruppe == plan.Zeilen[r0].Gruppe)
-                            r1++;
-                        int c0 = 0;
-                        while (c0 < stunden)
-                        {
-                            if (!AlleInRuhe(plan, r0, r1, erste + c0)) { c0++; continue; }
-                            int c1 = c0;
-                            while (c1 + 1 < stunden && AlleInRuhe(plan, r0, r1, erste + c1 + 1)) c1++;
-                            var block = RectangleF.FromLTRB(spalteX(c0) + spalt / 2, zeileY(r0) + spalt / 2,
-                                spalteX(c1 + 1) - spalt / 2, zeileY(r1) + zeileH - spalt / 2);
-                            Formen.Fuellen(g, block, radius * 1.6f, Leer);
-                            // «Ruhezeit» in den längsten Abschnitt ohne Essens-Symbole
-                            int bestA = c0, bestL = 0, a = c0;
-                            for (int c = c0; c <= c1 + 1; c++)
+                            if (!plan.Essen[r, erste + c]) continue;
+                            if (posten(c))
                             {
-                                bool frei = c <= c1 && !Enumerable.Range(r0, r1 - r0 + 1).Any(r => plan.Essen[r, erste + c]);
-                                if (frei) continue;
-                                if (c - a > bestL) { bestL = c - a; bestA = a; }
-                                a = c + 1;
+                                if (c - feldA[c] < feldE[c] - c) essenLinks.Add(feldVon(c));
+                                else essenRechts.Add(feldVon(c));
                             }
-                            if (bestL > 0)
-                                TextEinpassen(g, "Ruhezeit", RectangleF.FromLTRB(spalteX(bestA) + spalt / 2, block.Top, spalteX(bestA + bestL) - spalt / 2, block.Bottom), tHell, u);
-                            c0 = c1 + 1;
+                            else if (posten(c - 1)) essenRechts.Add(feldVon(c - 1));
+                            else if (posten(c + 1)) essenLinks.Add(feldVon(c + 1));
+                            else essenMitte[c] = true;
                         }
-                        r0 = r1 + 1;
+
+                        float es = Math.Min(spalteW, zeileH) * 0.5f;
+                        for (int c0 = 0; c0 < stunden; c0 = feldE[c0] + 1)
+                        {
+                            int k = plan.Z[r, erste + c0];
+                            var feld = feldVon(c0);
+                            using (var f = new SolidBrush(k >= 0 ? Pastell(cfg.Posten[k].Farbe) : k == Plan.RUHE ? Leer : Color.White))
+                                g.FillRectangle(f, feld);
+                            g.DrawRectangle(gitter, feld.X, feld.Y, feld.Width, feld.Height);
+                            if (k >= 0)
+                            {
+                                // in schmalen Feldern weicht der Buchstabe dem Essens-Zeichen aus
+                                var platz = feld;
+                                if (feld.Width < spalteW * 1.5f)
+                                {
+                                    if (essenLinks.Contains(feld)) platz = RectangleF.FromLTRB(platz.Left + es * 0.55f, platz.Top, platz.Right, platz.Bottom);
+                                    if (essenRechts.Contains(feld)) platz = RectangleF.FromLTRB(platz.Left, platz.Top, platz.Right - es * 0.55f, platz.Bottom);
+                                }
+                                g.DrawString(Kuerzel(k), fZeichen, tText, platz, mitte);
+                            }
+                            else if (essenMitte[c0])
+                                EssenSymbol(g, RectangleF.Inflate(feld, -zeileH * 0.06f, -zeileH * 0.06f));
+                            else if (k == Plan.RUHE)
+                                g.DrawString("-", fZeichen, tText, feld, mitte);
+                        }
+
+                        foreach (var feld in essenLinks)
+                            EssenSymbol(g, new RectangleF(feld.Left + 1 * u, feld.Top + 1 * u, es, es));
+                        foreach (var feld in essenRechts)
+                            EssenSymbol(g, new RectangleF(feld.Right - es - 1 * u, feld.Top + 1 * u, es, es));
                     }
-
-                    // Essen in der Ruhezeit (zur festgelegten Essenszeit)
-                    for (int r = 0; r < n; r++)
-                        for (int c = 0; c < stunden; c++)
-                            if (plan.Z[r, erste + c] == Plan.RUHE && plan.Essen[r, erste + c])
-                                EssenSymbol(g, new RectangleF(spalteX(c) + spalt / 2, zeileY(r) + spalt / 2, spalteW - spalt, zeileH - spalt));
-
-                    // Tageswechsel
-                    using (var tag = new Pen(HellGrau, u * 1.2f))
-                        for (int c = 1; c < stunden; c++)
-                            if (von.AddHours(c).Hour == 0)
-                                g.DrawLine(tag, spalteX(c), kopfY, spalteX(c), tabUnten);
                 }
 
-                // Öffnungszeiten der Posten
-                float by = tabUnten + 12 * u;
-                foreach (int k in balken)
+                // Linien: dick zwischen Blöcken und Zweierteams, sonst dünn
+                var teamGroesse = new Dictionary<int, int>();
+                for (int r = 0; r < n; r++)
                 {
-                    var posten = cfg.Posten[k];
-                    var farbe = Color.FromArgb(posten.Farbe);
-                    g.DrawString(posten.Name, fKlein, tGrau, new RectangleF(b.Left + gradW, by, nameW, balkenH), links);
-                    if (posten.Draussen)
-                    {
-                        float nw = Math.Min(nameW - 12 * u, g.MeasureString(posten.Name, fKlein).Width);
-                        SchneeSymbol(g, new RectangleF(b.Left + gradW + nw + 2 * u, by + (balkenH - 9 * u) / 2, 9 * u, 9 * u));
-                    }
-                    int c0 = 0;
-                    while (c0 < stunden)
-                    {
-                        if (!posten.OffenUm(von.AddHours(c0).Hour)) { c0++; continue; }
-                        int c1 = c0;
-                        while (c1 + 1 < stunden && posten.OffenUm(von.AddHours(c1 + 1).Hour)) c1++;
-                        var feld = RectangleF.FromLTRB(spalteX(c0) + spalt / 2, by + 2 * u, spalteX(c1 + 1) - spalt / 2, by + balkenH - 2 * u);
-                        Formen.Fuellen(g, feld, feld.Height / 2, farbe);
-                        using (var t = new SolidBrush(TextFarbeAuf(farbe)))
-                            g.DrawString("offen " + Zeit.Text(posten.OffenVon) + " – " + Zeit.Text(posten.OffenBis),
-                                fKlein, t, feld, mitte);
-                        c0 = c1 + 1;
-                    }
-                    by += balkenH;
+                    int anz;
+                    teamGroesse.TryGetValue(plan.Team[r], out anz);
+                    teamGroesse[plan.Team[r]] = anz + 1;
                 }
+                for (int r = 0; r < n - 1; r++)
+                {
+                    bool trenn = plan.Block[r + 1] != plan.Block[r]
+                        || (plan.Team[r + 1] != plan.Team[r] && (teamGroesse[plan.Team[r]] > 1 || teamGroesse[plan.Team[r + 1]] > 1));
+                    float y = zeileY(r + 1);
+                    g.DrawLine(trenn ? dick : gitter, b.Left, y, trenn ? b.Right : xs, y);
+                }
+                g.DrawLine(duenn, b.Left + gradW, kopfY, b.Left + gradW, tabUnten);
+                g.DrawLine(duenn, xs, tabOben, xs, tabUnten);
+                for (int c = 1; c < stunden; c++)
+                    if (von.AddHours(c).Hour == 0)
+                        g.DrawLine(dick, spalteX(c), tabOben, spalteX(c), tabUnten);
+                g.DrawLine(dick, b.Left, kopfY, b.Right, kopfY);
+                g.DrawRectangle(dick, b.Left, tabOben, b.Width, tabUnten - tabOben);
 
-                // Legende
-                float ly = by + 14 * u;
-                g.DrawString("Legende", fKleinFett, tGrau, new RectangleF(b.Left + gradW, ly, nameW, legendeH), links);
-                float lx = xs;
-                float q = 10 * u;
-                // Posten (mit Schneeflocke, wenn im Freien), dann die Erklärungen für Essen, Draussen und Fahrer
-                var extras = new List<KeyValuePair<string, Action<RectangleF>>>();
+                // Zeichen unter der Tabelle
+                float zy0 = tabUnten + 5 * u;
+                float zx = b.Left;
+                var zeichen = new List<KeyValuePair<string, Action<RectangleF>>>();
+                zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Ruhezeit, feld =>
+                {
+                    using (var f = new SolidBrush(Leer)) g.FillRectangle(f, feld);
+                    g.DrawRectangle(gitter, feld.X, feld.Y, feld.Width, feld.Height);
+                    g.DrawString("-", fKleinFett, tText, feld, mitte);
+                }));
+                if (frei)
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.OhnePosten, feld =>
+                        g.DrawRectangle(gitter, feld.X, feld.Y, feld.Width, feld.Height)));
                 if (cfg.Essenszeiten.Count > 0)
-                    extras.Add(new KeyValuePair<string, Action<RectangleF>>("Essen", feld =>
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Essen, feld =>
                     {
-                        var gross = RectangleF.Inflate(feld, 2.5f * u, 2.5f * u);
-                        g.FillEllipse(new SolidBrush(Leer), gross);
+                        var gross = RectangleF.Inflate(feld, 2 * u, 2 * u);
+                        using (var f = new SolidBrush(Leer)) g.FillEllipse(f, gross);
                         EssenSymbol(g, gross);
                     }));
                 if (cfg.Posten.Any(p => p.Draussen))
-                    extras.Add(new KeyValuePair<string, Action<RectangleF>>("Draussen", feld => SchneeSymbol(g, feld)));
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Draussen, feld => SchneeSymbol(g, feld)));
                 if (plan.Zeilen.Any(p => p.Fahrer))
-                    extras.Add(new KeyValuePair<string, Action<RectangleF>>("Fahrer", feld => AutoSymbol(g, RectangleF.Inflate(feld, 1.5f * u, 1.5f * u))));
-                for (int k = 0; k < cfg.Posten.Count + extras.Count; k++)
+                    zeichen.Add(new KeyValuePair<string, Action<RectangleF>>(t.Fahrer, feld => AutoSymbol(g, RectangleF.Inflate(feld, 1.5f * u, 1.5f * u))));
+                foreach (var z in zeichen)
                 {
-                    bool posten = k < cfg.Posten.Count;
-                    string name = posten ? cfg.Posten[k].Name : extras[k - cfg.Posten.Count].Key;
-                    var feld = new RectangleF(lx, ly + (legendeH - q) / 2, q, q);
-                    if (posten) Formen.Fuellen(g, feld, 2 * u, Color.FromArgb(cfg.Posten[k].Farbe));
-                    else extras[k - cfg.Posten.Count].Value(feld);
-                    float w = g.MeasureString(name, fKlein).Width;
-                    g.DrawString(name, fKlein, tText, new RectangleF(lx + q + 4 * u, ly, w + 2 * u, legendeH), links);
-                    lx += q + 4 * u + w;
-                    if (posten && cfg.Posten[k].Draussen)
-                    {
-                        SchneeSymbol(g, new RectangleF(lx + 2 * u, ly + (legendeH - q) / 2, q, q));
-                        lx += q + 2 * u;
-                    }
-                    lx += 16 * u;
+                    float zq = 9 * u;
+                    z.Value(new RectangleF(zx, zy0 + (zeichenH - zq) / 2, zq, zq));
+                    float w = g.MeasureString(z.Key, fKlein).Width;
+                    g.DrawString(z.Key, fKlein, tText, new RectangleF(zx + zq + 3 * u, zy0, w + 2 * u, zeichenH), links);
+                    zx += zq + 3 * u + w + 14 * u;
                 }
 
                 // Nicht eingeteilte Personen (z. B. Reserve), nach Funktion
                 if (plan.NichtEingeteilt.Count > 0)
                 {
-                    float ry = ly + legendeH + 4 * u;
+                    float ry = zy0 + zeichenH;
                     string text = string.Join("     ", plan.NichtEingeteilt.GroupBy(p => p.Funktion)
                         .Select(gr => gr.Key + ":  " + string.Join(", ", gr.Select(p => (p.Grad + " " + p.Name).Trim()))));
-                    g.DrawString("Nicht eingeteilt", fKleinFett, tGrau, new RectangleF(b.Left + gradW, ry, nameW, 14 * u), links);
-                    g.DrawString(text, fKlein, tText, new RectangleF(xs, ry, b.Right - xs, 14 * u), links);
+                    float w = g.MeasureString(t.NichtEingeteilt, fKleinFett).Width + 6 * u;
+                    g.DrawString(t.NichtEingeteilt, fKleinFett, tText, new RectangleF(b.Left, ry, w, zeichenH), links);
+                    g.DrawString(text, fKlein, tText, new RectangleF(b.Left + w, ry, b.Right - b.Left - w, zeichenH), links);
                 }
 
-                g.DrawString("Erstellt mit ShiftDesk am " + DateTime.Now.ToString("dd.MM.yyyy HH:mm"), fKlein, tHell, b.Right, b.Bottom - fussH + 2 * u, rechts);
+                float fy = b.Bottom - fussH;
+                g.DrawString(string.Format(t.Erstellt, DateTime.Now.ToString("dd.MM.yyyy HH:mm")), fKlein, tGrau, new RectangleF(b.Left, fy, b.Width / 2, fussH), links);
+                if (plan.Seiten > 1)
+                    g.DrawString(string.Format(t.Seite, seite + 1, plan.Seiten), fKlein, tGrau, new RectangleF(b.Left, fy, b.Width, fussH), mitte);
             }
         }
 
-        static bool AlleInRuhe(Plan plan, int r0, int r1, int t)
+        static Image armeeLogo;
+
+        static Image ArmeeLogo
         {
-            for (int r = r0; r <= r1; r++)
-                if (plan.Z[r, t] != Plan.RUHE) return false;
-            return true;
+            get
+            {
+                if (armeeLogo == null)
+                {
+                    var s = typeof(Zeichner).Assembly.GetManifestResourceStream("ShiftDesk.armee-logo.png");
+                    if (s != null) armeeLogo = Image.FromStream(s);
+                }
+                return armeeLogo;
+            }
         }
 
-        static void TextEinpassen(Graphics g, string text, RectangleF feld, Brush pinsel, float u)
+        // Beginnt um diese Stunde eine neue Ablösung? Sonst bleibt der Posten im selben Feld.
+        static bool NeueAbloesung(Konfiguration cfg, int stunde)
         {
-            float groesse = Math.Min(Math.Min(feld.Height * 0.42f, 26 * u), feld.Width / (text.Length * 0.62f));
-            if (groesse < 7 * u) return;
-            using (var f = new Font(SchriftFett, groesse, GraphicsUnit.World))
-                g.DrawString(text, f, pinsel, feld, new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap });
+            int takt = cfg.TaktUm(stunde);
+            return takt <= 1 || stunde % takt == 0;
         }
 
-        static Color TextFarbeAuf(Color hintergrund)
+        // A, B, C … Z, dann AA, AB …
+        static string Kuerzel(int k)
         {
-            int hell = (hintergrund.R * 299 + hintergrund.G * 587 + hintergrund.B * 114) / 1000;
-            return hell < 150 ? Color.White : TextFarbe;
+            return k < 26 ? ((char)('A' + k)).ToString() : Kuerzel(k / 26 - 1) + (char)('A' + k % 26);
+        }
+
+        // Postenfarbe stark aufgehellt, damit die Buchstaben gut lesbar sind
+        static Color Pastell(int farbe)
+        {
+            var c = Color.FromArgb(farbe);
+            const float a = 0.42f;
+            return Color.FromArgb((int)(c.R * a + 255 * (1 - a)), (int)(c.G * a + 255 * (1 - a)), (int)(c.B * a + 255 * (1 - a)));
         }
 
         // Auto: Fahrer

@@ -50,9 +50,9 @@ namespace ShiftDesk
         readonly List<TabellenEditor> editoren = new List<TabellenEditor>();
         readonly HashSet<DataGridView> benutzteTabellen = new HashSet<DataGridView>();   // Tabellen, in denen der Benutzer schon ausgewählt hat
         Panel seitePersonen, seitePlan;
-        Eingabefeld txtName;
+        Eingabefeld txtName, txtEinheit;
         DatumFeld dtStart, dtEnde;
-        AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis, teams;
+        AuswahlFeld abloesung, draussen, stuendlichVon, stuendlichBis, teams, sprache;
         bool hinweiseOffen;
         static readonly string[] AbloesungListe = { "Jede Stunde", "Alle 2 Stunden", "Alle 3 Stunden", "Alle 4 Stunden" };
         // Index = erlaubte Stunden am Stück draussen, 0 = keine Grenze
@@ -423,11 +423,19 @@ namespace ShiftDesk
         {
             // Einstellungen
             txtName = new Eingabefeld { Width = Theme.S(280) };
+            txtEinheit = new Eingabefeld { Width = Theme.S(200) };
             dtStart = new DatumFeld();
             dtEnde = new DatumFeld();
-            Thema(() => txtName.ThemaAnwenden());
+            sprache = new AuswahlFeld(Druck.Sprachen.Select(s => s.Name).ToArray()) { Width = Theme.S(140) };
+            Thema(() => { txtName.ThemaAnwenden(); txtEinheit.ThemaAnwenden(); });
+            // Name, Einheit und Sprache sind nur für den Ausdruck: sofort in der Vorschau, ohne neuen Plan
+            txtName.Box.TextChanged += (s, e) => DruckAngabenUebernehmen();
+            txtEinheit.Box.TextChanged += (s, e) => DruckAngabenUebernehmen();
+            sprache.WertGeaendert += (s, e) => DruckAngabenUebernehmen();
             var felder = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true };
             felder.Controls.Add(Feld("Name", txtName));
+            felder.Controls.Add(Feld("Einheit", txtEinheit));
+            felder.Controls.Add(Feld("Sprache Ausdruck", sprache));
             felder.Controls.Add(Feld("Start", dtStart));
             felder.Controls.Add(Feld("Ende", dtEnde));
             abloesung = new AuswahlFeld(AbloesungListe) { Width = Theme.S(170) };
@@ -547,7 +555,7 @@ namespace ShiftDesk
             koerper.Controls.Add(einstellungen);
 
             return NeueSeite("Plan",
-                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante; Hinweise zeigt ein Klick auf den Status. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. «Feste Zweierteams»: je zwei Personen (Reihenfolge der Personen-Tabelle) sind immer zusammen auf dem gleichen Posten. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
+                "Zeitraum wählen und auf «Plan erstellen» klicken. Jeder Klick ergibt eine neue, gleich faire Variante; Hinweise zeigt ein Klick auf den Status. Name, Einheit und Sprache gelten nur für den Ausdruck und ändern den Plan nicht. «Jede Stunde von/bis»: in diesem Fenster (z. B. 00:00 bis 06:00) wird trotz längerer Ablösung jede Stunde abgelöst, gleiche Zeit bei «von» und «bis» = kein Fenster. «Feste Zweierteams»: je zwei Personen (Reihenfolge der Personen-Tabelle) sind immer zusammen auf dem gleichen Posten. Zoomen mit dem Mausrad oder Doppelklick, den vergrösserten Plan mit der Maus verschieben.",
                 koerper,
                 Knopf("Drucken", "printer", Drucken),
                 Knopf("Als PDF", "file-down", AlsPdf),
@@ -970,6 +978,8 @@ namespace ShiftDesk
                 gridEssen.Rows.Add(e.Name, Zeit.Text(e.Von), Zeit.Text(e.Bis));
 
             txtName.Text = k.Name;
+            txtEinheit.Text = k.Einheit ?? "";
+            sprache.Index = Math.Max(0, Array.FindIndex(Druck.Sprachen, s => s.Kuerzel == k.Sprache));
             dtStart.Wert = k.Start > new DateTime(2000, 1, 1) ? k.Start : DateTime.Today;
             dtEnde.Wert = k.Ende > new DateTime(2000, 1, 1) ? k.Ende : DateTime.Today.AddDays(1);
             abloesung.Index = Math.Min(AbloesungListe.Length, Math.Max(1, k.AbloesungStunden)) - 1;
@@ -1009,6 +1019,8 @@ namespace ShiftDesk
             var k = new Konfiguration
             {
                 Name = txtName.Text.Trim(),
+                Einheit = txtEinheit.Text.Trim(),
+                Sprache = Druck.Sprachen[sprache.Index].Kuerzel,
                 Start = dtStart.Wert,
                 Ende = dtEnde.Wert,
                 AbloesungStunden = abloesung.Index + 1,
@@ -1151,6 +1163,16 @@ namespace ShiftDesk
             hinweiseOffen = false;   // Hinweise sind zugeklappt, bis man auf den Status-Chip klickt
             StatistikAnzeigen();
             StatusAktualisieren();
+        }
+
+        void DruckAngabenUebernehmen()
+        {
+            if (plan == null) return;
+            plan.Cfg.Name = txtName.Text.Trim();
+            plan.Cfg.Einheit = txtEinheit.Text.Trim();
+            plan.Cfg.Sprache = Druck.Sprachen[sprache.Index].Kuerzel;
+            vorschauPlan = null;   // Blatt neu zeichnen
+            vorschau.Invalidate();
         }
 
         void Blaettern(int richtung)

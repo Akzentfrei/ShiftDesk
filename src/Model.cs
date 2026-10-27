@@ -78,8 +78,19 @@ namespace ShiftDesk
 
     public class Konfiguration
     {
-        public static readonly string[] StandardGrade =
-            { "Rekr", "Sdt", "Gfr", "Obgfr", "Kpl", "Wm", "Obwm", "Fw", "Four", "Hptfw", "Adj Uof", "Lt", "Oblt", "Hptm" };
+        // Vorgaben für neue Dateien und das Beispiel
+        public static readonly string[] StandardGrade = { "Rekr", "Sdt", "Gfr", "Obgfr", "Kpl", "Wm", "Obwm" };
+
+        public static List<Funktion> StandardFunktionen()
+        {
+            return new List<Funktion>
+            {
+                new Funktion { Name = "Wacht Kdt" },
+                new Funktion { Name = "Wacht Kdt Stv" },
+                new Funktion { Name = "Wache" },
+                new Funktion { Name = "Reserve", ImPlan = false },
+            };
+        }
 
         // Diese Posten gibt es in jeder Datei; sie werden ergänzt, wenn sie fehlen, und lassen sich nicht löschen
         public static readonly string[] Pflichtposten = { "Wacht Kdt", "Presto", "Subito" };
@@ -116,20 +127,22 @@ namespace ShiftDesk
 
         public static Konfiguration Neu()
         {
-            var k = new Konfiguration { Start = DateTime.Today, Ende = DateTime.Today.AddDays(1) };
+            var k = new Konfiguration { Start = DateTime.Today, Ende = DateTime.Today.AddDays(1),
+                Funktionen = StandardFunktionen(), Grade = StandardGrade.ToList() };
             k.PflichtpostenErgaenzen();
             return k;
         }
 
         // Dateiversion: 0 = von vor den frei definierbaren Funktionen und Graden (Feld fehlt in der Datei),
-        // 2 = vor dem Schalter «Pflicht» (Pflichtposten werden beim Laden als Pflicht markiert)
-        public const int AktuelleVersion = 3;
+        // 2 = vor dem Schalter «Pflicht» (Pflichtposten werden beim Laden als Pflicht markiert),
+        // 3 = Einheit und Zweck waren noch im Namen zusammengefasst
+        public const int AktuelleVersion = 4;
         public int Version;
 
         public string Name = "Wachtablösung";
-        // nur noch zum Lesen älterer Dateien, werden in Name übernommen
-        public string Einheit;
-        public string Zweck;
+        public string Einheit = "";
+        public string Zweck;               // nur noch zum Lesen älterer Dateien, wird in Name übernommen
+        public string Sprache = "de";      // Sprache des Ausdrucks: de, fr, it, en
         public DateTime Start;
         public DateTime Ende;
         public int AbloesungStunden = 1;   // Posten wechseln alle X Stunden (ab Mitternacht gerechnet)
@@ -170,7 +183,7 @@ namespace ShiftDesk
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(pfad)));
             var ser = new XmlSerializer(typeof(Konfiguration));
-            Einheit = Zweck = null;
+            Zweck = null;
             Version = AktuelleVersion;
             using (var fs = File.Create(pfad))
                 ser.Serialize(fs, this);
@@ -182,9 +195,15 @@ namespace ShiftDesk
             Konfiguration k;
             using (var fs = File.OpenRead(pfad))
                 k = (Konfiguration)ser.Deserialize(fs);
-            if (!string.IsNullOrEmpty(k.Zweck) || !string.IsNullOrEmpty(k.Einheit))
-                k.Name = string.Join(" ", new[] { k.Zweck, k.Einheit }.Where(s => !string.IsNullOrEmpty(s)));
-            k.Einheit = k.Zweck = null;
+            if (k.Version < 4)
+            {
+                if (!string.IsNullOrEmpty(k.Zweck) || !string.IsNullOrEmpty(k.Einheit))
+                    k.Name = string.Join(" ", new[] { k.Zweck, k.Einheit }.Where(s => !string.IsNullOrEmpty(s)));
+                k.Einheit = "";
+            }
+            k.Zweck = null;
+            if (k.Einheit == null) k.Einheit = "";
+            if (Druck.Sprachen.All(x => x.Kuerzel != k.Sprache)) k.Sprache = "de";
             if (k.Version < 2) k.AeltereVersionUebernehmen();
             if (k.Version < 3)
                 foreach (var p in k.Posten.Where(p => IstPflichtposten(p.Name)))
@@ -228,11 +247,7 @@ namespace ShiftDesk
             k.Ende = DateTime.Today.AddDays(1);
             k.Grade = StandardGrade.ToList();
             k.Zweierteams = true;
-
-            k.Funktionen.Add(new Funktion { Name = "Wacht Kdt" });
-            k.Funktionen.Add(new Funktion { Name = "Wacht Kdt Stv" });
-            k.Funktionen.Add(new Funktion { Name = "Wache" });
-            k.Funktionen.Add(new Funktion { Name = "Reserve", ImPlan = false });
+            k.Funktionen = StandardFunktionen();
 
             k.Gruppen.Add(new Gruppe { Name = "Kdt", RuheVon = 3, RuheBis = 15 });
             k.Gruppen.Add(new Gruppe { Name = "Kdt Stv", RuheVon = 15, RuheBis = 3 });

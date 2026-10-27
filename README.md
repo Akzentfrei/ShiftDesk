@@ -16,7 +16,7 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 - **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
   Typ «Fahrer» (nur für Fahrer), «Pflicht» (muss immer voll besetzt sein, wird vor allen anderen besetzt),
   die Pflichtposten Wacht Kdt, Presto und Subito (immer vorhanden),
-  «Draussen» (Posten im Freien, im Plan mit Schneeflocke) und «Am Stück» (gleiche Person bleibt möglichst
+  «Draussen» (Posten im Freien, in der Legende mit Schneeflocke) und «Am Stück» (gleiche Person bleibt möglichst
   lange); die Reihenfolge ist die Wichtigkeit
 - **Feste Zweierteams** (wahlweise): je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe
   sind immer zusammen auf dem gleichen Posten; Posten mit 2 Personen bekommen ein Team, einzelne Plätze eine
@@ -28,6 +28,10 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 - **Plan** über mehrere Tage, Ablösung jede Stunde oder alle 2–4 Stunden, wahlweise mit einem Zeitfenster
   (z. B. 00:00 bis 06:00), in dem trotzdem jede Stunde abgelöst wird; jede Erstellung ergibt eine neue
   faire Variante (Zuteilung mit der Ungarischen Methode)
+- **Ausdruck** im Aufbau des Formulars «Ablösungsliste» mit Armee-Logo, auf Deutsch, Französisch, Italienisch
+  oder Englisch: Kopf mit Einheit, Für, Datum und Legende, Posten als
+  Buchstaben (A, B, C …) auf hellen Postenfarben, ein Feld pro Ablösung, «-» für Ruhezeit, dicke Linien
+  zwischen Zweierteams und Blöcken, Stunden senkrecht auf den Linien (0000 bis 2400)
 - Vorschau mit Zoom (Mausrad, Doppelklick), Drucken, PDF (Microsoft Print to PDF) und Excel (.xlsx)
 - Statistik pro Person und Posten
 - Modernes Design, folgt dem Windows-Farbmodus (hell/dunkel)
