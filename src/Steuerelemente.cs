@@ -338,10 +338,33 @@ namespace ShiftDesk
         }
     }
 
+    // Kleiner Knopf nur mit Symbol (z. B. Seitenleiste ein- und ausklappen); beim Darüberfahren hinterlegt
+    public class SymbolKnopf : ThemaControl
+    {
+        public string Icon;
+
+        public SymbolKnopf(string icon)
+        {
+            Icon = icon;
+            Size = new Size(Theme.S(32), Theme.S(32));
+            Cursor = Cursors.Hand;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            if (Hover) Formen.Fuellen(g, new RectangleF(0, 0, Width, Height), Theme.S(8), Theme.Hover);
+            float s = Theme.S(18);
+            Lucide.Zeichne(g, Icon, new RectangleF((Width - s) / 2, (Height - s) / 2, s, s), Hover ? Theme.Text : Theme.Gedaempft);
+        }
+    }
+
     // Kleine Abschnittsüberschrift (Seitenleiste, Einstellungen); schmal = nur ein kurzer Strich
     public class Abschnitt : ThemaControl
     {
         public bool Schmal;
+        public bool Trennlinie;   // feine Linie oben, als Abgrenzung zum Abschnitt davor
         readonly int einzug;
 
         public Abschnitt(string text, int einzug = 12)
@@ -360,6 +383,9 @@ namespace ShiftDesk
                     e.Graphics.DrawLine(p, Theme.S(12), Height - Theme.S(14), Width - Theme.S(12), Height - Theme.S(14));
                 return;
             }
+            if (Trennlinie)
+                using (var p = new Pen(Theme.Rand))
+                    e.Graphics.DrawLine(p, einzug, Theme.S(4), Width - 1, Theme.S(4));
             TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle(einzug, 0, Width - einzug, Height - Theme.S(6)),
                 Theme.Gedaempft, TextFormatFlags.Bottom | TextFormatFlags.Left | TextFormatFlags.NoPadding);
         }
@@ -881,6 +907,9 @@ namespace ShiftDesk
         readonly Bildlaufleiste leiste = new Bildlaufleiste(false);
         int versatz;
 
+        // ohne sichtbare Leiste: geblättert wird nur mit dem Mausrad
+        public bool OhneLeiste;
+
         public BildlaufPanel(Control inhalt)
         {
             this.inhalt = inhalt;
@@ -908,7 +937,7 @@ namespace ShiftDesk
             int breite = ClientSize.Width, hoehe = ClientSize.Height;
             if (breite <= 0 || hoehe <= 0) return;
             int h = InhaltHoehe(breite);
-            if (h > hoehe)
+            if (h > hoehe && !OhneLeiste)
             {
                 // Platz für die Leiste lassen
                 breite -= Bildlaufleiste.Dicke + Theme.S(4);
@@ -919,6 +948,7 @@ namespace ShiftDesk
             if (inhalt.Bounds != ziel) inhalt.Bounds = ziel;
             leiste.Bounds = new Rectangle(ClientSize.Width - Bildlaufleiste.Dicke, 0, Bildlaufleiste.Dicke, hoehe);
             leiste.Setzen(versatz, h, hoehe);
+            if (OhneLeiste) leiste.Visible = false;
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)

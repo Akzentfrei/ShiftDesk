@@ -57,6 +57,12 @@ namespace ShiftDesk
 
         // Seitenleiste: oben Marke und Seiten, unten die Datei-Befehle (oder ein Datei-Menü, wenn die Höhe nicht reicht)
         PufferPanel seitenleiste;
+        SymbolKnopf leisteKnopf;   // Seitenleiste von Hand ein- und ausklappen
+        bool? leisteEingeklappt;   // null = je nach Fensterbreite
+        readonly Timer leisteTimer = new Timer { Interval = 10 };   // weiches Ein-/Ausfahren
+        int leisteVon, leisteZiel;
+        DateTime leisteStart;
+        const int LeisteDauer = 200;   // Millisekunden
         readonly List<Control> seitenleisteOben = new List<Control>(), seitenleisteUnten = new List<Control>();
         readonly List<Tuple<string, string, Action>> dateiBefehle = new List<Tuple<string, string, Action>>();
         NavEintrag dateiMenue;
@@ -227,18 +233,61 @@ namespace ShiftDesk
             dateiMenue = new NavEintrag("Datei", "folder-open");
             dateiMenue.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) DateiMenueZeigen(); };
 
+            leisteKnopf = new SymbolKnopf("panel-left-close");
+            leisteKnopf.Click += (s, e) =>
+            {
+                // von Hand umschalten; die Wahl gilt dann auch bei anderer Fensterbreite
+                leisteEingeklappt = (leisteTimer.Enabled ? leisteZiel : seitenleiste.Width) >= Theme.S(150);
+                SeitenleisteBreite(true);
+            };
+            leisteTimer.Tick += (s, e) =>
+            {
+                double t = Math.Min(1, (DateTime.Now - leisteStart).TotalMilliseconds / LeisteDauer);
+                double weich = 1 - Math.Pow(1 - t, 3);   // bremst zum Ende hin ab
+                int breite = leisteVon + (int)Math.Round((leisteZiel - leisteVon) * weich);
+                seitenleiste.Width = breite;
+                inhalt.Left = breite;
+                if (t >= 1) LeisteFertig();
+            };
+
             foreach (var c in seitenleisteOben.Concat(seitenleisteUnten)) seitenleiste.Controls.Add(c);
             seitenleiste.Controls.Add(dateiMenue);
+            seitenleiste.Controls.Add(leisteKnopf);
+            leisteKnopf.BringToFront();
             seitenleiste.Layout += (s, e) => SeitenleisteAnordnen();
             return seitenleiste;
         }
 
-        // Schmales Fenster: die Seitenleiste zeigt nur noch Symbole
-        void SeitenleisteBreite()
+        // Eingeklappt (von Hand oder im schmalen Fenster): die Seitenleiste zeigt nur noch Symbole
+        // animiert: weich hinfahren (beim Klick auf den Knopf); sonst sofort (z. B. beim Ziehen am Fensterrand)
+        void SeitenleisteBreite(bool animiert = false)
         {
             if (WindowState == FormWindowState.Minimized) return;
-            int breite = ClientSize.Width < Theme.S(1200) ? Theme.S(72) : Theme.S(248);
+            bool klein = leisteEingeklappt ?? ClientSize.Width < Theme.S(1200);
+            int breite = klein ? Theme.S(72) : Theme.S(248);
+            if (animiert && Visible)
+            {
+                if (seitenleiste.Width == breite) return;
+                leisteVon = seitenleiste.Width;
+                leisteZiel = breite;
+                leisteStart = DateTime.Now;
+                // Neu anordnen ist teuer: während der Fahrt behält der Inhalt seine Grösse und wird nur verschoben.
+                // Beim Ausfahren bekommt er gleich die neue, schmalere Breite, beim Einfahren erst am Schluss die breitere.
+                int w = ClientSize.Width;
+                inhalt.Dock = DockStyle.None;
+                inhalt.Bounds = new Rectangle(leisteVon, 0, Math.Min(w - leisteVon, w - leisteZiel), ClientSize.Height);
+                leisteTimer.Start();
+                return;
+            }
+            LeisteFertig();
             if (seitenleiste.Width != breite) seitenleiste.Width = breite;
+        }
+
+        // Fahrt beenden: der Inhalt füllt wieder den Platz neben der Seitenleiste
+        void LeisteFertig()
+        {
+            leisteTimer.Stop();
+            if (inhalt.Dock != DockStyle.Fill) inhalt.Dock = DockStyle.Fill;
         }
 
         void SeitenleisteAnordnen()
@@ -258,12 +307,23 @@ namespace ShiftDesk
             int unten = seitenleiste.ClientSize.Height - Theme.S(14);
             // sehr niedriges Fenster: Einträge rücken zusammen, damit nichts unter dem Datei-Menü verschwindet
             int seitenAnzahl = seitenleisteOben.OfType<NavEintrag>().Count();
-            bool eng = Theme.S(8 + 72 + 34) + seitenAnzahl * Theme.S(42) + Theme.S(8) + dateiMenue.Height > unten;
+            bool eng = Theme.S(8 + 72 + 34) + (schmal ? Theme.S(36) : 0) + seitenAnzahl * Theme.S(42) + Theme.S(8) + dateiMenue.Height > unten;
             foreach (var c in seitenleisteOben)
             {
                 int h = c is NavEintrag ? Theme.S(eng ? 36 : 42) : c is Marke ? Theme.S(eng ? 56 : 72) : Theme.S(eng ? 22 : 34);
                 c.SetBounds(x, y, w, h);
                 y += h;
+                if (!(c is Marke)) continue;
+                // Knopf zum Ein-/Ausklappen: breit rechts neben dem Logo, schmal darunter
+                leisteKnopf.Icon = schmal ? "panel-left-open" : "panel-left-close";
+                leisteKnopf.Tipp = schmal ? "Seitenleiste ausklappen" : "Seitenleiste einklappen";
+                if (schmal)
+                {
+                    leisteKnopf.Location = new Point((seitenleiste.ClientSize.Width - leisteKnopf.Width) / 2, y);
+                    y += leisteKnopf.Height + Theme.S(4);
+                }
+                else leisteKnopf.Location = new Point(x + w - leisteKnopf.Width, c.Top + (h - leisteKnopf.Height) / 2);
+                leisteKnopf.Invalidate();
             }
             int untenH = seitenleisteUnten.Sum(c => c.Height);
             bool passt = y + Theme.S(8) + untenH <= unten;
@@ -617,7 +677,9 @@ namespace ShiftDesk
             var felder = new FlowLayoutPanel { WrapContents = true, Margin = Padding.Empty };
             Action<string> abschnitt = titel =>
             {
-                var a = new Abschnitt(titel, 0) { Height = Theme.S(28), Margin = Padding.Empty };
+                // ab dem zweiten Abschnitt eine feine Trennlinie darüber
+                bool linie = planAbschnitte.Count > 0;
+                var a = new Abschnitt(titel, 0) { Height = Theme.S(linie ? 36 : 24), Margin = Padding.Empty, Trennlinie = linie };
                 planAbschnitte.Add(a);
                 felder.Controls.Add(a);
             };
@@ -636,10 +698,10 @@ namespace ShiftDesk
             felder.Controls.Add(Feld("Name", txtName,
                 "Steht auf dem Ausdruck bei «Für». Ändert den Plan nicht und ist sofort in der Vorschau zu sehen."));
             felder.Controls.Add(Feld("Einheit", txtEinheit,
-                "Steht auf dem Ausdruck bei «Einheit». Ändert den Plan nicht und ist sofort in der Vorschau zu sehen."));
-            felder.Controls.Add(Feld("Sprache Ausdruck", sprache,
-                "Sprache des Ausdrucks (Deutsch, Französisch, Italienisch oder Englisch). Namen von Posten, Funktionen und Personen bleiben so, wie du sie erfasst hast."));
-            einstellungenBild = new BildlaufPanel(felder) { Dock = DockStyle.Fill };
+                "Steht auf dem Ausdruck bei «Einheit». Ändert den Plan nicht und ist sofort in der Vorschau zu sehen.", true));
+            felder.Controls.Add(Feld("Sprache", sprache,
+                "Sprache des Ausdrucks (Deutsch, Französisch, Italienisch oder Englisch). Namen von Posten, Funktionen und Personen bleiben so, wie du sie erfasst hast.", true));
+            einstellungenBild = new BildlaufPanel(felder) { Dock = DockStyle.Fill, OhneLeiste = true };
             einstellungen = new Karte();
             einstellungen.Controls.Add(einstellungenBild);
             Thema(() => { einstellungen.BackColor = felder.BackColor = einstellungenBild.BackColor = Theme.Karte; });
@@ -771,7 +833,7 @@ namespace ShiftDesk
         }
 
         // Breites Fenster: Einstellungen als Spalte links, Vorschau rechts daneben (am meisten Platz fürs Blatt).
-        // Schmales Fenster: Einstellungen oben (höchstens gut 40 % der Höhe, sonst mit Bildlauf), Vorschau darunter.
+        // Schmales Fenster: Einstellungen oben (ganz, solange die Vorschau genug Platz behält), Vorschau darunter.
         void PlanAnordnen()
         {
             int w = planKoerper.ClientSize.Width, h = planKoerper.ClientSize.Height;
@@ -787,7 +849,8 @@ namespace ShiftDesk
             else
             {
                 int noetig = einstellungenBild.InhaltHoehe(w - einstellungen.Padding.Horizontal) + einstellungen.Padding.Vertical;
-                int hoehe = Math.Min(noetig, Math.Max(Theme.S(150), (int)(h * 0.42)));
+                // ganz zeigen (es gibt keine Bildlaufleiste), solange der Vorschau genug Platz bleibt
+                int hoehe = Math.Min(noetig, Math.Max(Theme.S(150), h - Theme.S(240)));
                 einstellungen.Bounds = new Rectangle(0, 0, w, hoehe);
                 planRechts.Bounds = new Rectangle(0, hoehe, w, h - hoehe);
             }
@@ -798,19 +861,20 @@ namespace ShiftDesk
             if (einstellungenSeitlich == seitlich) return;
             einstellungenSeitlich = seitlich;
             einstellungen.SuspendLayout();
-            // seitlich: rechts nur ein schmaler Rand, dort liegt bei Bedarf die Bildlaufleiste
+            // ohne Bildlaufleiste (geblättert wird mit dem Mausrad): links und rechts gleicher Rand
             einstellungen.Padding = seitlich
-                ? new Padding(Theme.S(18), Theme.S(8), Theme.S(4), Theme.S(10))
+                ? new Padding(Theme.S(18), Theme.S(8), Theme.S(18), Theme.S(10))
                 : new Padding(Theme.S(18), Theme.S(14), Theme.S(18), Theme.S(10));
-            int voll = Theme.S(340) - Theme.S(18 + 4) - Bildlaufleiste.Dicke - Theme.S(4);
+            int voll = Theme.S(340) - Theme.S(18 + 18);
             int luecke = Theme.S(12);
-            var ersteHalbe = planFelder.FirstOrDefault(x => x.Halb);
+            // halbe Felder stehen paarweise nebeneinander, das linke hat rechts die Lücke
+            var linkeHalbe = planFelder.Where(x => x.Halb).Where((x, i) => i % 2 == 0).ToList();
             foreach (var f in planFelder)
             {
                 if (seitlich)
                 {
                     f.Feld.Width = f.Halb ? (voll - luecke) / 2 : voll;
-                    f.Feld.Margin = new Padding(0, 0, f == ersteHalbe ? luecke : 0, Theme.S(8));
+                    f.Feld.Margin = new Padding(0, 0, linkeHalbe.Contains(f) ? luecke : 0, Theme.S(4));
                     f.Eingabe.Width = f.Feld.Width;
                 }
                 else
