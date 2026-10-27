@@ -295,8 +295,10 @@ namespace ShiftDesk
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            string schluessel = Width + "|" + Height + "|" + aktiv + "|" + Hover + "|" + schmal + "|" + Text + "|" + Icon + "|"
-                + Untergrund.ToArgb() + "|" + Theme.Text.ToArgb() + "|" + Theme.Auswahl.ToArgb();
+            // Hintergrund und Symbol (geglättete Pfade, teuer) kommen aus dem Zwischenbild; die Schrift wird direkt
+            // gezeichnet, denn auf einer Bitmap glättet Windows sie nicht
+            string schluessel = Width + "|" + Height + "|" + aktiv + "|" + Hover + "|" + Icon + "|"
+                + Untergrund.ToArgb() + "|" + Theme.Akzent.ToArgb() + "|" + Theme.Auswahl.ToArgb();
             if (bild == null || schluessel != bildSchluessel)
             {
                 if (bild != null) bild.Dispose();
@@ -309,6 +311,11 @@ namespace ShiftDesk
                 bildSchluessel = schluessel;
             }
             e.Graphics.DrawImageUnscaled(bild, 0, 0);
+            if (schmal) return;
+            TextRenderer.DrawText(e.Graphics, Text, aktiv ? Schrift.Ueberschrift : Font,
+                new Rectangle(Theme.S(44), 0, Width - Theme.S(48), Height), aktiv ? Theme.Akzent : Theme.Text,
+                aktiv ? Theme.Auswahl : Hover ? Theme.Hover : Untergrund,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
 
         protected override void Dispose(bool disposing)
@@ -327,10 +334,6 @@ namespace ShiftDesk
             int icon = Theme.S(18);
             float x = Theme.S(16);
             Lucide.Zeichne(g, Icon, new RectangleF(x, (Height - icon) / 2f, icon, icon), aktiv ? Theme.Akzent : Theme.Gedaempft);
-            if (schmal) return;
-            TextRenderer.DrawText(g, Text, aktiv ? Schrift.Ueberschrift : Font,
-                new Rectangle(Theme.S(44), 0, Width - Theme.S(48), Height), aktiv ? Theme.Akzent : Theme.Text,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
 
