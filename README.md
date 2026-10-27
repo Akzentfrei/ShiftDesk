@@ -4,6 +4,12 @@ Windows-Programm für die Ablöseplanung (Wachtablösungsliste). ShiftDesk teilt
 stündlich oder alle paar Stunden fair auf die Posten auf, berücksichtigt Ruhezeiten und Essenszeiten und
 gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 
+## Download
+
+**[ShiftDesk.zip herunterladen](https://github.com/Akzentfrei/ShiftDesk/releases/latest/download/ShiftDesk.zip)**
+(neueste Version), entpacken und `ShiftDesk.exe` starten. Die beiliegende `Anleitung.txt` erklärt die
+Installation; alle Versionen stehen unter [Releases](https://github.com/Akzentfrei/ShiftDesk/releases).
+
 ## Funktionen
 
 - **Funktionen & Grade** frei anlegen (z. B. Wacht Kdt, Wacht Kdt Stv, Wache, Reserve); Funktionen ohne
@@ -66,6 +72,11 @@ baut die exe und packt sie mit `Anleitung.txt` in `ShiftDesk-<Version>.zip`. Die
 verschicken (Mail-Anbieter blockieren oft .exe-Anhänge, auch in Zips; dann per OneDrive, Google Drive,
 WeTransfer o. ä. teilen). Vor jeder Weitergabe die Version in `src/Program.cs` erhöhen, damit die bereits
 installierte Version die Aktualisierung anbietet.
+
+Auf GitHub veröffentlichen: Version in `src/Program.cs` erhöhen, committen und eine passende Marke pushen,
+z. B. `git tag v1.2.0` und `git push origin main v1.2.0`. Die GitHub Action (`.github/workflows/release.yml`)
+baut dann die exe und hängt `ShiftDesk.zip` und `ShiftDesk.exe` an ein neues Release; der Download-Link oben
+zeigt immer auf die neueste Version.
 
 Die exe ist nicht signiert. Beim ersten Start einer heruntergeladenen Datei warnt Windows SmartScreen
 («Der Computer wurde durch Windows geschützt»); «Weitere Informationen → Trotzdem ausführen» startet sie.

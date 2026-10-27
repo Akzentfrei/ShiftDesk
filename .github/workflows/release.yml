@@ -1,0 +1,41 @@
+# Baut ShiftDesk.exe auf GitHub und hängt sie an ein Release, sobald eine Versionsmarke gepusht wird
+# (z. B. git tag v1.2.0 && git push origin v1.2.0). Die Marke muss zur Version in src/Program.cs passen.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bauen und packen
+        shell: cmd
+        run: call release.bat
+
+      - name: Version prüfen und feste Dateinamen für den Download
+        shell: pwsh
+        run: |
+          $v = (Get-Item ShiftDesk.exe).VersionInfo.FileVersion -replace '\.0$', ''
+          if ("v$v" -ne "${{ github.ref_name }}") { throw "Version $v in src/Program.cs passt nicht zur Marke ${{ github.ref_name }}" }
+          Copy-Item "ShiftDesk-$v.zip" ShiftDesk.zip
+
+      - name: Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ShiftDesk ${{ github.ref_name }}
+          files: |
+            ShiftDesk.zip
+            ShiftDesk.exe
+          body: |
+            **ShiftDesk.zip herunterladen**, entpacken und `ShiftDesk.exe` starten. Die beiliegende `Anleitung.txt` erklärt die Installation (Windows 10 oder 11, keine Administratorrechte nötig).
+
+            Beim ersten Start warnt Windows vor Programmen aus dem Internet: «Weitere Informationen» → «Trotzdem ausführen».
+
+            Wer ShiftDesk schon installiert hat, startet einfach die neue `ShiftDesk.exe`: sie bietet an, die installierte Version zu aktualisieren.
