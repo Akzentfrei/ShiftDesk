@@ -34,7 +34,9 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   zwischen Zweierteams und Blöcken, Stunden senkrecht auf den Linien (0000 bis 2400)
 - Vorschau mit Zoom (Mausrad, Doppelklick), Drucken, PDF (Microsoft Print to PDF) und Excel (.xlsx)
 - Statistik pro Person und Posten
-- Modernes Design, folgt dem Windows-Farbmodus (hell/dunkel)
+- Modernes Design, folgt dem Windows-Farbmodus (hell/dunkel); Meldungen, Rückfragen, Aufklapplisten,
+  Farbwähler (Palette und eigene Farbe mit Farbfläche und Hex-Eingabe) und Tooltips sind selbst gezeichnet,
+  nur die Datei- und Druckerauswahl sind Windows-Dialoge
 
 ## Bauen
 
@@ -88,11 +90,11 @@ Die zuletzt verwendeten Eingaben liegen unter `%APPDATA%\ShiftDesk\letzte.xml`.
 | `src/ExcelExport.cs` | Excel-Export (Office Open XML, ohne Zusatzbibliotheken) |
 | `src/MainForm.cs` | Hauptfenster |
 | `src/TabellenEditor.cs` | Bearbeitbare Tabellenfelder |
-| `src/Steuerelemente.cs`, `src/Popups.cs` | Eigene Steuerelemente und Aufklapplisten |
+| `src/Steuerelemente.cs`, `src/Popups.cs` | Eigene Steuerelemente, Aufklapplisten, Farbwähler und Tooltips |
 | `src/Theme.cs` | Farben hell/dunkel |
 | `src/Lucide.cs`, `src/LucideDaten.cs` | Icon-Zeichner und eingebettete Icons |
 | `src/Installation.cs` | Installieren / Aktualisieren / Deinstallieren |
-| `src/Dialoge.cs` | Rückfragen (Gefahr rot, Vorschlag blau) |
+| `src/Dialoge.cs` | Rückfragen (Gefahr rot, Vorschlag blau) und Meldungen (Info, Erfolg, Warnung, Fehler) |
 | `release.bat`, `Anleitung.txt` | Zip zum Weitergeben |
 
 ## Lizenzen

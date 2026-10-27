@@ -5,14 +5,34 @@ using System.Windows.Forms;
 
 namespace ShiftDesk
 {
+    public enum MeldungsArt { Info, Erfolg, Warnung, Fehler }
+
+    // Mitteilungen mit nur einem Knopf «OK» (statt der Windows-MessageBox)
+    public static class Meldung
+    {
+        public static void Info(IWin32Window besitzer, string titel, string text = null) { Zeigen(besitzer, titel, text, MeldungsArt.Info); }
+        public static void Erfolg(IWin32Window besitzer, string titel, string text = null) { Zeigen(besitzer, titel, text, MeldungsArt.Erfolg); }
+        public static void Warnung(IWin32Window besitzer, string titel, string text = null) { Zeigen(besitzer, titel, text, MeldungsArt.Warnung); }
+        public static void Fehler(IWin32Window besitzer, string titel, string text = null) { Zeigen(besitzer, titel, text, MeldungsArt.Fehler); }
+
+        public static void Zeigen(IWin32Window besitzer, string titel, string text, MeldungsArt art)
+        {
+            string symbol = art == MeldungsArt.Erfolg ? "circle-check" : art == MeldungsArt.Warnung ? "triangle-alert" : art == MeldungsArt.Fehler ? "circle-x" : "info";
+            Color farbe = art == MeldungsArt.Erfolg ? Theme.Erfolg : art == MeldungsArt.Warnung ? Theme.Warnung : art == MeldungsArt.Fehler ? Theme.Gefahr : Theme.Akzent;
+            using (var d = new GefahrDialog(besitzer != null, titel, text, "OK", null, symbol, farbe, false))
+                d.ShowDialog(besitzer);
+        }
+    }
+
     // Rückfrage vor allem, was Eingaben löscht oder überschreibt: der rote Bestätigungsknopf steht links,
     // «Abbrechen» rechts und hat den Fokus, damit ein schnelles Enter nichts kaputt macht.
+    // Derselbe Dialog zeigt auch Vorschläge (blau) und Mitteilungen (nur «OK», siehe Meldung).
     public class GefahrDialog : Form
     {
         public static bool Fragen(IWin32Window besitzer, string titel, string text, string knopf,
             string symbol = "triangle-alert", string abbrechen = "Abbrechen")
         {
-            using (var d = new GefahrDialog(besitzer != null, titel, text, knopf, symbol, abbrechen, true))
+            using (var d = new GefahrDialog(besitzer != null, titel, text, knopf, abbrechen, symbol, Theme.Gefahr, true))
                 return d.ShowDialog(besitzer) == DialogResult.OK;
         }
 
@@ -20,18 +40,19 @@ namespace ShiftDesk
         public static bool Vorschlagen(IWin32Window besitzer, string titel, string text, string knopf,
             string symbol = "circle-check", string abbrechen = "Nicht jetzt")
         {
-            using (var d = new GefahrDialog(besitzer != null, titel, text, knopf, symbol, abbrechen, false))
+            using (var d = new GefahrDialog(besitzer != null, titel, text, knopf, abbrechen, symbol, Theme.Akzent, false))
                 return d.ShowDialog(besitzer) == DialogResult.OK;
         }
 
         readonly string symbol;
-        readonly bool gefahr;
+        readonly Color farbe;
         readonly int fussOben;
 
-        GefahrDialog(bool mitBesitzer, string titel, string text, string knopf, string symbol, string abbrechen, bool gefahr)
+        // abbrechen = null: nur ein Knopf (Mitteilung)
+        internal GefahrDialog(bool mitBesitzer, string titel, string text, string knopf, string abbrechen, string symbol, Color farbe, bool gefahr)
         {
             this.symbol = symbol;
-            this.gefahr = gefahr;
+            this.farbe = farbe;
             Text = "ShiftDesk";
             Font = new Font("Segoe UI", 9.5f);
             AutoScaleMode = AutoScaleMode.None;
@@ -55,27 +76,40 @@ namespace ShiftDesk
                 unten = lblText.Bottom;
                 Controls.Add(lblText);
             }
+            else if (lblTitel.Height < Theme.S(40))
+            {
+                lblTitel.Top = rand + (Theme.S(40) - lblTitel.Height) / 2;   // nur Titel: mittig neben dem Symbol
+                unten = lblTitel.Bottom;
+            }
             unten = Math.Max(unten, rand + Theme.S(40));
-
-            var btnOk = new ModernButton(knopf, null) { Gefahr = gefahr, Primaer = !gefahr, Fokusrahmen = true, Untergrundfarbe = Theme.Hintergrund, TabIndex = 0 };
-            var btnAbbrechen = new ModernButton(abbrechen, null) { Fokusrahmen = true, Untergrundfarbe = Theme.Hintergrund, TabIndex = 1 };
-            btnOk.Click += (s, e) => DialogResult = DialogResult.OK;
-            btnAbbrechen.Click += (s, e) => DialogResult = DialogResult.Cancel;
 
             fussOben = unten + rand;
             int knopfY = fussOben + Theme.S(16);
-            btnAbbrechen.Location = new Point(breite - rand - btnAbbrechen.Width, knopfY);
-            btnOk.Location = new Point(btnAbbrechen.Left - Theme.S(8) - btnOk.Width, knopfY);
-            Controls.Add(btnOk);
-            Controls.Add(btnAbbrechen);
-            ClientSize = new Size(breite, knopfY + btnAbbrechen.Height + Theme.S(16));
-            ActiveControl = gefahr ? btnAbbrechen : btnOk;
+            var btnOk = new ModernButton(knopf, null) { Gefahr = gefahr, Primaer = !gefahr, Fokusrahmen = true, Untergrundfarbe = Theme.Hintergrund, TabIndex = 0 };
+            btnOk.Click += (s, e) => DialogResult = DialogResult.OK;
+            if (abbrechen == null)
+            {
+                btnOk.Width = Math.Max(btnOk.Width, Theme.S(88));
+                btnOk.Location = new Point(breite - rand - btnOk.Width, knopfY);
+                Controls.Add(btnOk);
+                ActiveControl = btnOk;
+            }
+            else
+            {
+                var btnAbbrechen = new ModernButton(abbrechen, null) { Fokusrahmen = true, Untergrundfarbe = Theme.Hintergrund, TabIndex = 1 };
+                btnAbbrechen.Click += (s, e) => DialogResult = DialogResult.Cancel;
+                btnAbbrechen.Location = new Point(breite - rand - btnAbbrechen.Width, knopfY);
+                btnOk.Location = new Point(btnAbbrechen.Left - Theme.S(8) - btnOk.Width, knopfY);
+                Controls.Add(btnOk);
+                Controls.Add(btnAbbrechen);
+                ActiveControl = gefahr ? btnAbbrechen : btnOk;
+            }
+            ClientSize = new Size(breite, knopfY + btnOk.Height + Theme.S(16));
         }
 
         Label TextLabel(string text, Font font, Color farbe, int x, int y, int breite)
         {
-            int h = TextRenderer.MeasureText(text, font, new Size(breite, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height;
-            return new Label
+            var l = new Label
             {
                 Text = text,
                 Font = font,
@@ -84,8 +118,10 @@ namespace ShiftDesk
                 AutoSize = false,
                 UseMnemonic = false,
                 Location = new Point(x, y),
-                Size = new Size(breite, h + Theme.S(2)),
             };
+            // so messen, wie das Label selbst umbricht (lange Dateipfade auch mitten im Wort)
+            l.Size = new Size(breite, l.GetPreferredSize(new Size(breite, 0)).Height + Theme.S(2));
+            return l;
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -112,10 +148,9 @@ namespace ShiftDesk
                 g.FillRectangle(b, 0, fussOben, ClientSize.Width, ClientSize.Height - fussOben);
             using (var p = new Pen(Theme.Rand))
                 g.DrawLine(p, 0, fussOben, ClientSize.Width, fussOben);
-            // Symbol im roten (Gefahr) oder blauen Kreis
+            // Symbol im farbigen Kreis (rot = Gefahr, blau = Vorschlag/Info, gelb = Warnung, grün = Erfolg)
             g.SmoothingMode = SmoothingMode.AntiAlias;
             int d = Theme.S(40), icon = Theme.S(20), x = Theme.S(24), y = Theme.S(24);
-            Color farbe = gefahr ? Theme.Gefahr : Theme.Akzent;
             using (var b = new SolidBrush(Color.FromArgb(Theme.Dunkel ? 48 : 26, farbe)))
                 g.FillEllipse(b, x, y, d, d);
             Lucide.Zeichne(g, symbol, new RectangleF(x + (d - icon) / 2f, y + (d - icon) / 2f, icon, icon), farbe);

@@ -104,6 +104,13 @@ namespace ShiftDesk
             g.SmoothingMode = glaettung;
         }
 
+        // AltGr (Ctrl+Alt, z. B. für # und @ auf der Schweizer Tastatur) ist keine Menütaste: beim Tippen offen bleiben
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if ((keyData & Keys.Control) == Keys.Control && (keyData & Keys.Alt) == Keys.Alt) return false;
+            return base.ProcessDialogKey(keyData);
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing) animation.Dispose();
@@ -120,6 +127,47 @@ namespace ShiftDesk
             protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
             {
             }
+        }
+    }
+
+    // Kurzinfo beim Darüberfahren im eigenen Design (statt des Windows-Tooltips)
+    public class ThemaTipp : ToolTip
+    {
+        static readonly Font Schrift = new Font("Segoe UI", 9f);
+        const TextFormatFlags Umbruch = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;   // lange Texte höchstens 420 px breit
+        string freierText;   // Text von Zeigen() (nicht über SetToolTip)
+
+        // An einer bestimmten Stelle zeigen, z. B. für eine Tabellenzelle
+        public void Zeigen(string text, Control c, Point p)
+        {
+            freierText = text;
+            Show(text, c, p, 6000);
+        }
+
+        public void Verbergen(Control c)
+        {
+            freierText = null;
+            Hide(c);
+        }
+
+        public ThemaTipp()
+        {
+            OwnerDraw = true;
+            InitialDelay = 400;
+            Popup += (s, e) =>
+            {
+                var text = TextRenderer.MeasureText(freierText ?? GetToolTip(e.AssociatedControl), Schrift, new Size(Theme.S(420), 0), Umbruch);
+                e.ToolTipSize = new Size(text.Width + Theme.S(16), text.Height + Theme.S(10));
+            };
+            Draw += (s, e) =>
+            {
+                var g = e.Graphics;
+                using (var b = new SolidBrush(Theme.Karte))
+                    g.FillRectangle(b, e.Bounds);
+                using (var p = new Pen(Theme.Rand))
+                    g.DrawRectangle(p, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                TextRenderer.DrawText(g, e.ToolTipText, Schrift, Rectangle.Inflate(e.Bounds, -Theme.S(8), -Theme.S(5)), Theme.Text, Umbruch | TextFormatFlags.VerticalCenter);
+            };
         }
     }
 
@@ -342,13 +390,13 @@ namespace ShiftDesk
         }
     }
 
-    // Farbpalette mit «Weitere Farben…»
+    // Farbpalette mit «Eigene Farbe…»; enthält alle Farben des Beispiels (Konfiguration.Beispiel)
     public class FarbAuswahl : ThemaControl
     {
         static readonly int[] Palette =
         {
-            0x4FADEA, 0x2E70BE, 0x1E3A8A, 0x22B8CF, 0x1E9C9C, 0x6EE7B7,
-            0x4CA850, 0x9ACD32, 0x6B8E23, 0xF7C143, 0xF28C28, 0xFF7F50,
+            0x4FADEA, 0x2E70BE, 0x1E3A8A, 0x22B8CF, 0x0D9488, 0x6EE7B7,
+            0x4CA850, 0x9ACD32, 0x6B8E23, 0xF7C143, 0xEA580C, 0xFF7F50,
             0xB22222, 0xF87171, 0xE0529C, 0xC026D3, 0x7030A0, 0xA78BFA,
             0x8B5A2B, 0xD6B98C, 0xA6A6A6, 0x6B7280, 0x374151, 0x111827,
         };
@@ -431,8 +479,278 @@ namespace ShiftDesk
             if (hover == Palette.Length) Formen.Fuellen(g, k, Theme.S(7), Theme.Hover);
             int icon = Theme.S(16);
             Lucide.Zeichne(g, "plus", new RectangleF(k.X + Theme.S(8), k.Y + (k.Height - icon) / 2f, icon, icon), Theme.Gedaempft);
-            TextRenderer.DrawText(g, "Weitere Farben…", Font, Rectangle.FromLTRB(k.X + icon + Theme.S(16), k.Y, k.Right, k.Bottom), Theme.Text,
+            TextRenderer.DrawText(g, "Eigene Farbe…", Font, Rectangle.FromLTRB(k.X + icon + Theme.S(16), k.Y, k.Right, k.Bottom), Theme.Text,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            // aktuelle Farbe, wenn sie nicht aus der Palette stammt
+            if (!Palette.Any(p => Color.FromArgb(255, Color.FromArgb(p)).ToArgb() == aktuell.ToArgb()))
+            {
+                var chip = new RectangleF(k.Right - Theme.S(8) - Theme.S(36), k.Y + (k.Height - Theme.S(20)) / 2f, Theme.S(36), Theme.S(20));
+                Formen.Umrandung(g, RectangleF.Inflate(chip, Theme.S(3), Theme.S(3)), Theme.S(7), Theme.Akzent, 2f);
+                Formen.Fuellen(g, chip, Theme.S(5), aktuell);
+                Formen.Umrandung(g, chip, Theme.S(5), Color.FromArgb(30, 0, 0, 0));
+            }
+            Popup.Rand(g, Size);
+        }
+    }
+
+    // Freie Farbwahl: Fläche für Sättigung/Helligkeit, Leiste für den Farbton, Hex-Eingabe und Vorschau (vorher/neu)
+    public class FarbMischer : ThemaControl
+    {
+        readonly int rand = Theme.S(14), kopfH = Theme.S(30), flaecheH = Theme.S(150), leisteH = Theme.S(14), zeileH = Theme.S(38), vorschauB = Theme.S(76);
+        readonly Color vorher;
+        readonly Eingabefeld hex;
+        Color neu;
+        float farbton, saettigung, helligkeit;   // 0..360, 0..1, 0..1
+        int ziehen;   // 0 = nichts, 1 = Fläche, 2 = Farbton-Leiste
+        bool hoverZurueck, hexSchreiben;
+
+        public event Action<Color> Gewaehlt;
+        public event Action Zurueck;
+
+        public FarbMischer(Color aktuell)
+        {
+            vorher = neu = Color.FromArgb(255, aktuell);
+            BackColor = Theme.Karte;
+            Font = new Font("Segoe UI", 9.5f);
+            AusFarbe(neu);
+
+            int y = Flaeche.Bottom + Theme.S(12) + leisteH + Theme.S(14);
+            hex = new Eingabefeld { Bounds = new Rectangle(rand + vorschauB + Theme.S(10), y, Theme.S(276) - 2 * rand - vorschauB - Theme.S(10), zeileH) };
+            hex.Box.MaxLength = 7;
+            hex.Box.CharacterCasing = CharacterCasing.Upper;
+            hex.Box.PreviewKeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) e.IsInputKey = true; };
+            hex.Box.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Melden(); } };
+            hex.Box.TextChanged += (s, e) =>
+            {
+                if (hexSchreiben) return;
+                Color c;
+                if (!HexLesen(hex.Text, out c)) return;
+                neu = c;
+                AusFarbe(c);
+                Invalidate();
+            };
+            Controls.Add(hex);
+
+            var uebernehmen = new ModernButton("Übernehmen", "check", true) { Untergrundfarbe = Theme.Karte };
+            uebernehmen.Bounds = new Rectangle(rand, hex.Bottom + Theme.S(12), hex.Right - rand, uebernehmen.Height);
+            uebernehmen.Click += (s, e) => Melden();
+            Controls.Add(uebernehmen);
+
+            Size = new Size(Theme.S(276), uebernehmen.Bottom + rand);
+            HexSchreiben();
+        }
+
+        Rectangle ZurueckKnopf
+        {
+            get { return new Rectangle(rand - Theme.S(6), rand, TextRenderer.MeasureText("Palette", Font).Width + Theme.S(36), kopfH); }
+        }
+
+        Rectangle Flaeche
+        {
+            get { return new Rectangle(rand, rand + kopfH + Theme.S(8), Theme.S(276) - 2 * rand, flaecheH); }
+        }
+
+        Rectangle Leiste
+        {
+            get { return new Rectangle(rand, Flaeche.Bottom + Theme.S(12), Flaeche.Width, leisteH); }
+        }
+
+        Rectangle Vorschau
+        {
+            get { return new Rectangle(rand, Leiste.Bottom + Theme.S(14), vorschauB, zeileH); }
+        }
+
+        void Melden()
+        {
+            var h = Gewaehlt;
+            if (h != null) h(neu);
+        }
+
+        // ---- Umrechnung RGB <-> HSV
+
+        void AusFarbe(Color c)
+        {
+            float r = c.R / 255f, g = c.G / 255f, b = c.B / 255f;
+            float max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b));
+            helligkeit = max;
+            saettigung = max <= 0 ? 0 : (max - min) / max;
+            if (max - min > 0.0001f) farbton = c.GetHue();   // bei Grau den bisherigen Farbton behalten
+        }
+
+        static Color AusHsv(float h, float s, float v)
+        {
+            h = ((h % 360) + 360) % 360 / 60f;
+            int i = (int)Math.Floor(h) % 6;
+            float f = h - (float)Math.Floor(h);
+            float p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
+            float r, g, b;
+            switch (i)
+            {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+            }
+            return Color.FromArgb((int)Math.Round(r * 255), (int)Math.Round(g * 255), (int)Math.Round(b * 255));
+        }
+
+        // «#RRGGBB», «RRGGBB» oder kurz «#RGB»
+        static bool HexLesen(string text, out Color farbe)
+        {
+            farbe = Color.Empty;
+            string s = (text ?? "").Trim().TrimStart('#');
+            if (s.Length == 3) s = new string(new[] { s[0], s[0], s[1], s[1], s[2], s[2] });
+            int wert;
+            if (s.Length != 6 || !int.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out wert)) return false;
+            farbe = Color.FromArgb(255, Color.FromArgb(wert));
+            return true;
+        }
+
+        void HexSchreiben()
+        {
+            hexSchreiben = true;
+            hex.Text = string.Format("#{0:X2}{1:X2}{2:X2}", neu.R, neu.G, neu.B);
+            hexSchreiben = false;
+        }
+
+        // ---- Maus
+
+        void Ziehen(Point p)
+        {
+            if (ziehen == 1)
+            {
+                var f = Flaeche;
+                saettigung = Math.Max(0, Math.Min(1, (p.X - f.X) / (float)f.Width));
+                helligkeit = 1 - Math.Max(0, Math.Min(1, (p.Y - f.Y) / (float)f.Height));
+            }
+            else if (ziehen == 2)
+            {
+                var l = Leiste;
+                farbton = Math.Max(0, Math.Min(359.9f, (p.X - l.X) / (float)l.Width * 360));
+            }
+            else return;
+            neu = AusHsv(farbton, saettigung, helligkeit);
+            HexSchreiben();
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                if (ZurueckKnopf.Contains(e.Location)) { var h = Zurueck; if (h != null) h(); }
+                else if (Rectangle.Inflate(Flaeche, Theme.S(4), Theme.S(4)).Contains(e.Location)) ziehen = 1;
+                else if (Rectangle.Inflate(Leiste, Theme.S(4), Theme.S(8)).Contains(e.Location)) ziehen = 2;
+                Ziehen(e.Location);
+            }
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (ziehen > 0) Ziehen(e.Location);
+            else
+            {
+                bool z = ZurueckKnopf.Contains(e.Location);
+                if (z != hoverZurueck) { hoverZurueck = z; Invalidate(); }
+                Cursor = z || Rectangle.Inflate(Flaeche, Theme.S(4), Theme.S(4)).Contains(e.Location) ||
+                         Rectangle.Inflate(Leiste, Theme.S(4), Theme.S(8)).Contains(e.Location) ? Cursors.Hand : Cursors.Default;
+            }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            ziehen = 0;
+            base.OnMouseUp(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            hoverZurueck = false;
+            Invalidate();
+            base.OnMouseLeave(e);
+        }
+
+        // ---- Zeichnen
+
+        static void Griff(Graphics g, PointF mitte, float d, Color farbe)
+        {
+            var r = new RectangleF(mitte.X - d / 2, mitte.Y - d / 2, d, d);
+            using (var schatten = new Pen(Color.FromArgb(90, 0, 0, 0), 1f))
+                g.DrawEllipse(schatten, RectangleF.Inflate(r, 1.5f, 1.5f));
+            using (var b = new SolidBrush(farbe))
+                g.FillEllipse(b, r);
+            using (var weiss = new Pen(Color.White, Theme.S(2.5f)))
+                g.DrawEllipse(weiss, r);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Theme.Karte);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            int icon = Theme.S(16);
+
+            // Kopf: zurück zur Palette, rechts der Titel
+            var z = ZurueckKnopf;
+            if (hoverZurueck) Formen.Fuellen(g, z, Theme.S(7), Theme.Hover);
+            Lucide.Zeichne(g, "chevron-left", new RectangleF(z.X + Theme.S(6), z.Y + (z.Height - icon) / 2f, icon, icon), Theme.Gedaempft);
+            TextRenderer.DrawText(g, "Palette", Font, Rectangle.FromLTRB(z.X + icon + Theme.S(10), z.Y, z.Right, z.Bottom), Theme.Gedaempft,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            using (var fett = new Font("Segoe UI Semibold", 10f))
+                TextRenderer.DrawText(g, "Eigene Farbe", fett, new Rectangle(rand, rand, Width - 2 * rand, kopfH), Theme.Text,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.Right | TextFormatFlags.SingleLine);
+
+            // Fläche: von links Weiss nach rechts voller Farbton, nach unten zu Schwarz
+            var f = Flaeche;
+            using (var pfad = Formen.Rund(f, Theme.S(8)))
+            {
+                var zustand = g.Save();
+                g.SetClip(pfad);
+                using (var b = new SolidBrush(AusHsv(farbton, 1, 1)))
+                    g.FillRectangle(b, f);
+                var breiter = Rectangle.Inflate(f, 1, 1);
+                using (var b = new LinearGradientBrush(breiter, Color.White, Color.FromArgb(0, Color.White), 0f))
+                    g.FillRectangle(b, f);
+                using (var b = new LinearGradientBrush(breiter, Color.FromArgb(0, Color.Black), Color.Black, 90f))
+                    g.FillRectangle(b, f);
+                g.Restore(zustand);
+                using (var p = new Pen(Color.FromArgb(30, 0, 0, 0)))
+                    g.DrawPath(p, pfad);
+            }
+            Griff(g, new PointF(f.X + saettigung * f.Width, f.Y + (1 - helligkeit) * f.Height), Theme.S(14), neu);
+
+            // Farbton-Leiste (Regenbogen)
+            var l = Leiste;
+            using (var b = new LinearGradientBrush(Rectangle.Inflate(l, 1, 0), Color.Red, Color.Red, 0f))
+            {
+                b.InterpolationColors = new ColorBlend
+                {
+                    Colors = new[] { Color.Red, Color.Yellow, Color.Lime, Color.Cyan, Color.Blue, Color.Magenta, Color.Red },
+                    Positions = new[] { 0f, 1 / 6f, 2 / 6f, 3 / 6f, 4 / 6f, 5 / 6f, 1f },
+                };
+                using (var pfad = Formen.Rund(l, l.Height / 2f))
+                    g.FillPath(b, pfad);
+            }
+            Griff(g, new PointF(l.X + farbton / 360f * l.Width, l.Y + l.Height / 2f), leisteH + Theme.S(4), AusHsv(farbton, 1, 1));
+
+            // Vorschau: links die bisherige, rechts die neue Farbe
+            var v = Vorschau;
+            using (var pfad = Formen.Rund(v, Theme.S(8)))
+            {
+                var zustand = g.Save();
+                g.SetClip(pfad);
+                using (var b = new SolidBrush(vorher))
+                    g.FillRectangle(b, v.X, v.Y, v.Width / 2, v.Height);
+                using (var b = new SolidBrush(neu))
+                    g.FillRectangle(b, v.X + v.Width / 2, v.Y, v.Width - v.Width / 2, v.Height);
+                g.Restore(zustand);
+                using (var p = new Pen(Theme.EingabeRand))
+                    g.DrawPath(p, pfad);
+            }
             Popup.Rand(g, Size);
         }
     }
