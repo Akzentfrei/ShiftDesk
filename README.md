@@ -14,10 +14,10 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   da sind, sonst andere Leute
 - **Gruppen & Ruhezeiten**: tägliche Ruhefenster, auch über Mitternacht
 - **Posten** mit Farbe, Anzahl Personen, Öffnungszeiten, erlaubten Funktionen, «Auffang» (übrige Leute),
-  Typ «Fahrer» (nur für Fahrer), «Pflicht» (muss immer voll besetzt sein, wird vor allen anderen besetzt),
-  die Pflichtposten Wacht Kdt, Presto und Subito (immer vorhanden),
-  «Draussen» (Posten im Freien, in der Legende mit Schneeflocke) und «Am Stück» (gleiche Person bleibt möglichst
-  lange); die Reihenfolge ist die Wichtigkeit
+  Typ «Fahrer» (nur für Fahrer) und «Draussen» (Posten im Freien, in der Legende mit Schneeflocke);
+  die Posten Wacht Kdt, Presto und Subito gibt es immer. Alle Posten sollen voll besetzt sein, reichen die
+  Leute nicht, entscheidet die Reihenfolge (unten bleibt zuerst leer). Wacht Kdt und Stv bleiben möglichst
+  am Stück auf ihrem Posten
 - **Feste Zweierteams** (wahlweise): je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe
   sind immer zusammen auf dem gleichen Posten; Posten mit 2 Personen bekommen ein Team, einzelne Plätze eine
   Einzelperson
@@ -35,6 +35,9 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
   zwischen Zweierteams und Blöcken, Stunden senkrecht auf den Linien (0000 bis 2400)
 - Vorschau mit Zoom (Mausrad, Doppelklick), Drucken, PDF (Microsoft Print to PDF) und Excel (.xlsx)
 - Statistik pro Person und Posten
+- Passt sich der Fenstergrösse an: im schmalen Fenster zeigt die Seitenleiste nur Symbole (Datei-Befehle im
+  Menü, wenn die Höhe nicht reicht), Knöpfe nur ihr Symbol, die Plan-Einstellungen stehen über statt neben der
+  Vorschau, und Tabellen lassen sich mit eigenen Bildlaufleisten (oder Shift+Mausrad) verschieben
 - Modernes Design, folgt dem Windows-Farbmodus (hell/dunkel); Meldungen, Rückfragen, Aufklapplisten,
   Farbwähler (Palette und eigene Farbe mit Farbfläche und Hex-Eingabe) und Tooltips sind selbst gezeichnet,
   nur die Datei- und Druckerauswahl sind Windows-Dialoge

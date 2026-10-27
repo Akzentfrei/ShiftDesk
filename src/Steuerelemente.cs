@@ -40,6 +40,47 @@ namespace ShiftDesk
                 g.DrawPath(s, p);
         }
 
+        // Quadrat der Kantenlänge s mitten im Feld (für Symbole)
+        public static RectangleF Mitte(RectangleF feld, float s)
+        {
+            return new RectangleF(feld.X + (feld.Width - s) / 2, feld.Y + (feld.Height - s) / 2, s, s);
+        }
+
+        // Eingabefeld: gleich für Textfelder, Aufklappfelder, Datum und Tabellenzellen.
+        // aktiv = Fokus oder aufgeklappt (blauer Rand), hover = Maus darüber (dunklerer Rand)
+        public static void Eingabe(Graphics g, RectangleF r, bool aktiv, bool hover)
+        {
+            Fuellen(g, r, Theme.RadiusFeld, Theme.Eingabe);
+            Umrandung(g, r, Theme.RadiusFeld, aktiv ? Theme.Akzent : hover ? Theme.Gedaempft : Theme.EingabeRand, aktiv ? 1.5f : 1f);
+        }
+
+        // Platz, den der Pfeil rechts in einem Aufklappfeld braucht
+        public static int PfeilPlatz
+        {
+            get { return Theme.S(14 + 10 + 6); }
+        }
+
+        // Pfeil rechts in einem Aufklappfeld (zeigt nach oben, solange die Liste offen ist)
+        public static void Aufklapppfeil(Graphics g, RectangleF feld, bool offen)
+        {
+            int icon = Theme.S(14);
+            Lucide.Zeichne(g, offen ? "chevron-up" : "chevron-down",
+                new RectangleF(feld.Right - icon - Theme.S(10), feld.Y + (feld.Height - icon) / 2f, icon, icon), offen ? Theme.Akzent : Theme.Gedaempft);
+        }
+
+        // Hinweis in einer leeren Fläche (noch kein Plan, leere Tabelle): Symbol, Titel und Text, mittig
+        public static void Leer(Graphics g, Rectangle bereich, string icon, string titel, string text)
+        {
+            int s = Theme.S(40);
+            int hoehe = s + Theme.S(14 + 26 + 4 + 22);
+            int y = bereich.Top + Math.Max(Theme.S(8), (bereich.Height - hoehe) / 2);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Lucide.Zeichne(g, icon, new RectangleF(bereich.Left + (bereich.Width - s) / 2f, y, s, s), Theme.Gedaempft, 1.6f);
+            var fl = TextFormatFlags.HorizontalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+            TextRenderer.DrawText(g, titel, Schrift.Titel, new Rectangle(bereich.Left, y + s + Theme.S(14), bereich.Width, Theme.S(26)), Theme.Text, fl);
+            TextRenderer.DrawText(g, text, Schrift.Text, new Rectangle(bereich.Left, y + s + Theme.S(44), bereich.Width, Theme.S(22)), Theme.Gedaempft, fl);
+        }
+
         // Schiebeschalter (statt Checkbox), zentriert im Feld
         public static void Schalter(Graphics g, RectangleF feld, bool an)
         {
@@ -53,7 +94,7 @@ namespace ShiftDesk
         }
     }
 
-    // Basis für selbst gezeichnete Steuerelemente
+    // Basis für selbst gezeichnete Steuerelemente: doppelt gepuffert, merkt sich, ob die Maus darüber ist
     public class ThemaControl : Control
     {
         public ThemaControl()
@@ -70,9 +111,31 @@ namespace ShiftDesk
             get { return Untergrundfarbe ?? (Parent != null ? Parent.BackColor : Theme.Hintergrund); }
         }
 
+        protected bool Hover { get; set; }
+
+        // Kurzinfo beim Darüberfahren (null = keine)
+        public string Tipp
+        {
+            set { ThemaTipp.Standard.SetToolTip(this, value); }
+        }
+
         protected override void OnPaintBackground(PaintEventArgs e)
         {
             e.Graphics.Clear(Untergrund);
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            Hover = true;
+            Invalidate();
+            base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            Hover = false;
+            Invalidate();
+            base.OnMouseLeave(e);
         }
     }
 
@@ -80,7 +143,7 @@ namespace ShiftDesk
     // aber nicht, solange jemand in einem Textfeld tippt (sonst gehen die nächsten Tasten ins Leere)
     public static class Fokus
     {
-        public static bool TextfeldAktiv(Control c)
+        static bool TextfeldAktiv(Control c)
         {
             var form = c.FindForm();
             Control aktiv = form == null ? null : form.ActiveControl;
@@ -101,7 +164,7 @@ namespace ShiftDesk
         public bool Primaer;
         public bool Gefahr;        // rot gefüllt (Löschen u. ä.)
         public bool Fokusrahmen;   // Tastaturfokus sichtbar machen (in Dialogen)
-        bool hover;
+        bool kompakt;
 
         public ModernButton(string text, string icon, bool primaer = false)
         {
@@ -109,25 +172,36 @@ namespace ShiftDesk
             Icon = icon;
             Primaer = primaer;
             Cursor = Cursors.Hand;
-            Font = new Font("Segoe UI Semibold", 9.5f);
-            Height = Theme.S(36);
+            Font = Schrift.Fett;
+            Height = Theme.KnopfHoehe;
             Margin = new Padding(Theme.S(8), 0, 0, 0);
-            BreiteAnpassen();
+            Width = VolleBreite;
         }
 
-        public void BreiteAnpassen()
+        // Breite mit Symbol und Text
+        public int VolleBreite
         {
-            if (string.IsNullOrEmpty(Text))
+            get
             {
-                Width = Height;
-                return;
+                if (string.IsNullOrEmpty(Text)) return Height;
+                return Theme.S(14) + (Icon != null ? Theme.S(16 + 8) : 0) + TextRenderer.MeasureText(Text, Font).Width + Theme.S(14);
             }
-            int text = TextRenderer.MeasureText(Text, Font).Width;
-            Width = Theme.S(14) + (Icon != null ? Theme.S(16 + 8) : 0) + text + Theme.S(14);
         }
 
-        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+        // Nur das Symbol zeigen, wenn es eng wird; der Text erscheint dann als Kurzinfo
+        public bool Kompakt
+        {
+            get { return kompakt; }
+            set
+            {
+                if (Icon == null || kompakt == value) return;
+                kompakt = value;
+                Width = value ? Height : VolleBreite;
+                Tipp = value ? Text : null;
+                Invalidate();
+            }
+        }
+
         protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
@@ -153,8 +227,8 @@ namespace ShiftDesk
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            float radius = Theme.S(8);
-            bool aktiv = hover && Enabled;
+            float radius = Theme.RadiusFeld;
+            bool aktiv = Hover && Enabled;
             if (Gefahr)
                 Formen.Fuellen(g, r, radius, aktiv ? Theme.GefahrKnopfHover : Theme.GefahrKnopf);
             else if (Primaer)
@@ -167,34 +241,34 @@ namespace ShiftDesk
             if (Fokusrahmen && Focused)
                 Formen.Umrandung(g, new RectangleF(1.5f, 1.5f, Width - 3, Height - 3), radius - 1, Theme.Akzent, 2f);
             Color farbe = !Enabled ? Theme.Gedaempft : Primaer || Gefahr ? Theme.AkzentText : Theme.Text;
-            int icon = Theme.S(16), luecke = string.IsNullOrEmpty(Text) || Icon == null ? 0 : Theme.S(8);
-            int text = string.IsNullOrEmpty(Text) ? 0 : TextRenderer.MeasureText(g, Text, Font, Size, TextFormatFlags.NoPadding).Width;
-            int breite = (Icon != null ? icon : 0) + luecke + text;
-            int x = (Width - breite) / 2;
+            string text = kompakt ? "" : Text;
+            int icon = Theme.S(16), luecke = string.IsNullOrEmpty(text) || Icon == null ? 0 : Theme.S(8);
+            int textBreite = string.IsNullOrEmpty(text) ? 0 : TextRenderer.MeasureText(g, text, Font, Size, TextFormatFlags.NoPadding).Width;
+            int x = (Width - ((Icon != null ? icon : 0) + luecke + textBreite)) / 2;
             if (Icon != null)
             {
                 Lucide.Zeichne(g, Icon, new RectangleF(x, (Height - icon) / 2f, icon, icon), farbe);
                 x += icon + luecke;
             }
-            if (text > 0)
-                TextRenderer.DrawText(g, Text, Font, new Rectangle(x, 0, text + 2, Height), farbe,
+            if (textBreite > 0)
+                TextRenderer.DrawText(g, text, Font, new Rectangle(x, 0, textBreite + 2, Height), farbe,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         }
     }
 
+    // Eintrag der Seitenleiste; schmal = nur das Symbol (der Text erscheint als Kurzinfo)
     public class NavEintrag : ThemaControl
     {
-        static readonly Font FettSchrift = new Font("Segoe UI Semibold", 10f);
         public string Icon;
-        bool aktiv, hover;
+        bool aktiv, schmal;
 
-        public NavEintrag(string text, string icon)
+        public NavEintrag(string text, string icon, int hoehe = 42)
         {
             Text = text;
             Icon = icon;
             Cursor = Cursors.Hand;
-            Font = new Font("Segoe UI", 10f);
-            Height = Theme.S(42);
+            Font = Schrift.Eingabe;
+            Height = Theme.S(hoehe);
         }
 
         public bool Aktiv
@@ -203,42 +277,39 @@ namespace ShiftDesk
             set { aktiv = value; Invalidate(); }
         }
 
-        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+        public bool Schmal
+        {
+            get { return schmal; }
+            set
+            {
+                if (schmal == value) return;
+                schmal = value;
+                Tipp = value ? Text : null;
+                Invalidate();
+            }
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0, Theme.S(2), Width, Height - Theme.S(4));
-            if (aktiv) Formen.Fuellen(g, r, Theme.S(8), Theme.Auswahl);
-            else if (hover) Formen.Fuellen(g, r, Theme.S(8), Theme.Hover);
-            Color farbe = aktiv ? Theme.Akzent : Theme.Text;
+            if (aktiv) Formen.Fuellen(g, r, Theme.RadiusFeld, Theme.Auswahl);
+            else if (Hover) Formen.Fuellen(g, r, Theme.RadiusFeld, Theme.Hover);
             int icon = Theme.S(18);
-            Lucide.Zeichne(g, Icon, new RectangleF(Theme.S(12), (Height - icon) / 2f, icon, icon), aktiv ? Theme.Akzent : Theme.Gedaempft);
-            TextRenderer.DrawText(g, Text, aktiv ? FettSchrift : Font,
-                new Rectangle(Theme.S(42), 0, Width - Theme.S(46), Height), farbe,
+            float x = schmal ? (Width - icon) / 2f : Theme.S(12);
+            Lucide.Zeichne(g, Icon, new RectangleF(x, (Height - icon) / 2f, icon, icon), aktiv ? Theme.Akzent : Theme.Gedaempft);
+            if (schmal) return;
+            TextRenderer.DrawText(g, Text, aktiv ? Schrift.Ueberschrift : Font,
+                new Rectangle(Theme.S(42), 0, Width - Theme.S(46), Height), aktiv ? Theme.Akzent : Theme.Text,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
 
-    // Logo oben in der Seitenleiste
+    // Logo oben in der Seitenleiste; schmal = nur das Logo
     public class Marke : ThemaControl
     {
-        static Image logo;
-
-        public static Image Logo
-        {
-            get
-            {
-                if (logo == null)
-                {
-                    var s = typeof(Marke).Assembly.GetManifestResourceStream("ShiftDesk.logo.png");
-                    if (s != null) logo = Image.FromStream(s);
-                }
-                return logo;
-            }
-        }
+        public bool Schmal;
 
         public Marke()
         {
@@ -251,37 +322,45 @@ namespace ShiftDesk
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             int kachel = Theme.S(40), y = (Height - kachel) / 2;
-            var r = new RectangleF(Theme.S(4), y, kachel, kachel);
-            if (Logo != null)
-                g.DrawImage(Logo, r);
+            var r = new RectangleF(Schmal ? (Width - kachel) / 2 : Theme.S(4), y, kachel, kachel);
+            var logo = Bilder.Laden("logo.png");
+            if (logo != null)
+                g.DrawImage(logo, r);
             else
             {
                 Formen.Fuellen(g, r, Theme.S(10), Theme.Akzent);
                 Lucide.Zeichne(g, "shield-check", RectangleF.Inflate(r, -Theme.S(9), -Theme.S(9)), Color.White);
             }
-            using (var titel = new Font("Segoe UI Semibold", 13f))
-            using (var unter = new Font("Segoe UI", 8.5f))
-            {
-                int x = Theme.S(6) + kachel + Theme.S(12);
-                TextRenderer.DrawText(g, "ShiftDesk", titel, new Point(x, y - Theme.S(3)), Theme.Text, TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(g, "Ablöseplanung", unter, new Point(x, y + Theme.S(21)), Theme.Gedaempft, TextFormatFlags.NoPadding);
-            }
+            if (Schmal) return;
+            int x = (int)r.Right + Theme.S(14);
+            TextRenderer.DrawText(g, "ShiftDesk", Schrift.Titel, new Point(x, y - Theme.S(3)), Theme.Text, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, "Ablöseplanung", Schrift.Klein, new Point(x, y + Theme.S(21)), Theme.Gedaempft, TextFormatFlags.NoPadding);
         }
     }
 
-    // Kleine Abschnittsüberschrift in der Seitenleiste
+    // Kleine Abschnittsüberschrift (Seitenleiste, Einstellungen); schmal = nur ein kurzer Strich
     public class Abschnitt : ThemaControl
     {
-        public Abschnitt(string text)
+        public bool Schmal;
+        readonly int einzug;
+
+        public Abschnitt(string text, int einzug = 12)
         {
             Text = text.ToUpperInvariant();
-            Font = new Font("Segoe UI Semibold", 7.5f);
+            this.einzug = Theme.S(einzug);
+            Font = Schrift.Abschnitt;
             Height = Theme.S(34);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle(Theme.S(12), 0, Width, Height - Theme.S(6)),
+            if (Schmal)
+            {
+                using (var p = new Pen(Theme.Rand))
+                    e.Graphics.DrawLine(p, Theme.S(12), Height - Theme.S(14), Width - Theme.S(12), Height - Theme.S(14));
+                return;
+            }
+            TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle(einzug, 0, Width - einzug, Height - Theme.S(6)),
                 Theme.Gedaempft, TextFormatFlags.Bottom | TextFormatFlags.Left | TextFormatFlags.NoPadding);
         }
     }
@@ -294,6 +373,7 @@ namespace ShiftDesk
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             Padding = new Padding(Theme.S(14));
+            BackColor = Theme.Karte;
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)
@@ -302,8 +382,8 @@ namespace ShiftDesk
             g.Clear(Parent != null ? Parent.BackColor : Theme.Hintergrund);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            Formen.Fuellen(g, r, Theme.S(12), Theme.Karte);
-            Formen.Umrandung(g, r, Theme.S(12), Theme.Rand);
+            Formen.Fuellen(g, r, Theme.RadiusKarte, Theme.Karte);
+            Formen.Umrandung(g, r, Theme.RadiusKarte, Theme.Rand);
         }
     }
 
@@ -313,12 +393,15 @@ namespace ShiftDesk
 
         public Eingabefeld()
         {
-            box = new TextBox { BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 10f) };
+            box = new TextBox { BorderStyle = BorderStyle.None, Font = Schrift.Eingabe };
             box.GotFocus += (s, e) => Invalidate();
             box.LostFocus += (s, e) => Invalidate();
+            // das Textfeld deckt fast alles ab: Darüberfahren auch dort zählen
+            box.MouseEnter += (s, e) => HoverPruefen();
+            box.MouseLeave += (s, e) => HoverPruefen();
             box.KeyPress += (s, e) => { if (NurZahlen && !char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar)) e.Handled = true; };
             Controls.Add(box);
-            Height = Theme.S(38);
+            Height = Theme.FeldHoehe;
             Cursor = Cursors.IBeam;
             ThemaAnwenden();
         }
@@ -343,6 +426,18 @@ namespace ShiftDesk
             Invalidate();
         }
 
+        void HoverPruefen()
+        {
+            bool h = ClientRectangle.Contains(PointToClient(Cursor.Position));
+            if (h != Hover) { Hover = h; Invalidate(); }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            HoverPruefen();
+        }
+
         protected override void OnClick(EventArgs e)
         {
             box.Focus();
@@ -358,11 +453,8 @@ namespace ShiftDesk
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            Formen.Fuellen(g, r, Theme.S(8), Theme.Eingabe);
-            Formen.Umrandung(g, r, Theme.S(8), box.Focused ? Theme.Akzent : Theme.EingabeRand, box.Focused ? 1.5f : 1f);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Formen.Eingabe(e.Graphics, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), box.Focused, Hover);
         }
     }
 
@@ -373,12 +465,10 @@ namespace ShiftDesk
         DateTime wert = DateTime.Today;
         int hoverZone = -1, offeneZone = -1;
 
-        public event EventHandler WertGeaendert;
-
         public DatumFeld()
         {
-            Font = new Font("Segoe UI", 10f);
-            Height = Theme.S(38);
+            Font = Schrift.Eingabe;
+            Height = Theme.FeldHoehe;
             Width = Theme.S(320);
             SetStyle(ControlStyles.Selectable, true);
             TabStop = true;
@@ -391,8 +481,6 @@ namespace ShiftDesk
             {
                 wert = new DateTime(value.Year, value.Month, value.Day, value.Hour, 0, 0);
                 Invalidate();
-                var h = WertGeaendert;
-                if (h != null) h(this, EventArgs.Empty);
             }
         }
 
@@ -471,7 +559,6 @@ namespace ShiftDesk
         protected override void OnMouseLeave(EventArgs e)
         {
             hoverZone = -1;
-            Invalidate();
             base.OnMouseLeave(e);
         }
 
@@ -482,11 +569,16 @@ namespace ShiftDesk
             base.OnMouseDown(e);
         }
 
+        // Das Mausrad ändert den Wert nur, wenn das Feld den Fokus hat; sonst blättert es die Seite weiter
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            int richtung = e.Delta > 0 ? 1 : -1;
-            if (e.X < Trenner) Wert = wert.AddDays(richtung);
-            else Wert = wert.AddHours(richtung);
+            if (Focused)
+            {
+                int richtung = e.Delta > 0 ? 1 : -1;
+                Wert = e.X < Trenner ? wert.AddDays(richtung) : wert.AddHours(richtung);
+                var h = e as HandledMouseEventArgs;
+                if (h != null) h.Handled = true;
+            }
             base.OnMouseWheel(e);
         }
 
@@ -511,10 +603,7 @@ namespace ShiftDesk
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            Formen.Fuellen(g, r, Theme.S(8), Theme.Eingabe);
-            bool aktiv = Focused || offeneZone >= 0;
-            Formen.Umrandung(g, r, Theme.S(8), aktiv ? Theme.Akzent : Theme.EingabeRand, aktiv ? 1.5f : 1f);
+            Formen.Eingabe(g, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), Focused || offeneZone >= 0, Hover);
             using (var linie = new Pen(Theme.EingabeRand))
                 g.DrawLine(linie, Trenner, Theme.S(8), Trenner, Height - Theme.S(8));
 
@@ -524,11 +613,9 @@ namespace ShiftDesk
             {
                 var z = Zone(i);
                 if (i == hoverZone) Formen.Fuellen(g, z, Theme.S(6), Theme.Hover);
-                int s = Theme.S(16);
-                Lucide.Zeichne(g, i % 2 == 0 ? "chevron-left" : "chevron-right",
-                    new RectangleF(z.X + (z.Width - s) / 2f, z.Y + (z.Height - s) / 2f, s, s), Theme.Gedaempft);
+                Lucide.Zeichne(g, i % 2 == 0 ? "chevron-left" : "chevron-right", Formen.Mitte(z, Theme.S(16)), Theme.Gedaempft);
             }
-            var fl = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
+            var fl = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
             TextRenderer.DrawText(g, wert.ToString("ddd, dd. MMM yyyy", De), Font,
                 Rectangle.FromLTRB(Zone(0).Right, 0, Zone(1).Left, Height), Theme.Text, fl);
             TextRenderer.DrawText(g, wert.ToString("HH:00"), Font,
@@ -536,63 +623,62 @@ namespace ShiftDesk
         }
     }
 
-    // Kleines farbiges Status-Etikett mit Icon
+    // Kleines farbiges Status-Etikett mit Icon; klickbar = klappt etwas auf (Pfeil rechts)
     public class StatusChip : ThemaControl
     {
-        public string Icon = "circle-check";
-        public Color Farbe = Color.Green;
-        bool klickbar, offen, hover;
+        string icon = "circle-check";
+        Color farbe = Color.Green;
+        bool klickbar, offen;
 
         public StatusChip()
         {
-            Font = new Font("Segoe UI Semibold", 9f);
+            Font = Schrift.KleinFett;
             Height = Theme.S(30);
         }
 
-        // klickbar: der Chip klappt etwas auf oder zu (Pfeil rechts), offen = aktuell aufgeklappt
-        public void Setzen(string text, string icon, Color farbe, bool klickbar = false, bool offen = false)
+        public void Setzen(string text, string icon, Color farbe, bool klickbar = false)
         {
             Text = text;
-            Icon = icon;
-            Farbe = farbe;
+            this.icon = icon;
+            this.farbe = farbe;
             this.klickbar = klickbar;
-            this.offen = offen;
             Cursor = klickbar ? Cursors.Hand : Cursors.Default;
             Width = Theme.S(12 + 16 + 8 + 14) + TextRenderer.MeasureText(text, Font).Width + (klickbar ? Theme.S(14 + 4) : 0);
             Visible = !string.IsNullOrEmpty(text);
             Invalidate();
         }
 
-        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+        // Aufgeklappt: der Pfeil zeigt nach oben
+        public bool Offen
+        {
+            get { return offen; }
+            set { offen = value; Invalidate(); }
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0, 0, Width - 1, Height - 1);
-            Formen.Fuellen(g, r, Height / 2f, Color.FromArgb((Theme.Dunkel ? 45 : 28) + (klickbar && hover ? 18 : 0), Farbe));
+            Formen.Fuellen(g, r, Height / 2f, Theme.Toenung(farbe, klickbar && (Hover || offen)));
             int s = Theme.S(16);
-            Lucide.Zeichne(g, Icon, new RectangleF(Theme.S(12), (Height - s) / 2f, s, s), Farbe);
-            TextRenderer.DrawText(g, Text, Font, new Rectangle(Theme.S(12) + s + Theme.S(8), 0, Width, Height), Farbe,
+            Lucide.Zeichne(g, icon, new RectangleF(Theme.S(12), (Height - s) / 2f, s, s), farbe);
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(Theme.S(12) + s + Theme.S(8), 0, Width, Height), farbe,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
             if (klickbar)
             {
                 int p = Theme.S(14);
-                Lucide.Zeichne(g, offen ? "chevron-up" : "chevron-down", new RectangleF(Width - Theme.S(14) - p, (Height - p) / 2f, p, p), Farbe);
+                Lucide.Zeichne(g, offen ? "chevron-up" : "chevron-down", new RectangleF(Width - Theme.S(14) - p, (Height - p) / 2f, p, p), farbe);
             }
         }
     }
-}
 
-namespace ShiftDesk
-{
     // Aufklappfeld im Eingabefeld-Stil (eigene Auswahlliste statt Windows-Combobox)
     public class AuswahlFeld : ThemaControl
     {
         readonly string[] optionen;
         string wert;
-        bool hover, offen;
+        bool offen;
 
         public event EventHandler WertGeaendert;
 
@@ -600,8 +686,8 @@ namespace ShiftDesk
         {
             this.optionen = optionen;
             wert = optionen.Length > 0 ? optionen[0] : "";
-            Font = new Font("Segoe UI", 10f);
-            Height = Theme.S(38);
+            Font = Schrift.Eingabe;
+            Height = Theme.FeldHoehe;
             Width = Theme.S(190);
             Cursor = Cursors.Hand;
         }
@@ -618,12 +704,9 @@ namespace ShiftDesk
             set { if (value >= 0 && value < optionen.Length) Wert = optionen[value]; }
         }
 
-        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
-
         protected override void OnMouseDown(MouseEventArgs e)
         {
-            if (Popup.GeradeGeschlossen(this)) { base.OnMouseDown(e); return; }
+            if (e.Button != MouseButtons.Left || Popup.GeradeGeschlossen(this)) { base.OnMouseDown(e); return; }
             var liste = new AuswahlListe(optionen, new[] { wert }, false, Width);
             var popup = new Popup(liste, this);
             liste.Gewaehlt += w =>
@@ -643,24 +726,198 @@ namespace ShiftDesk
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            Formen.Fuellen(g, r, Theme.S(8), Theme.Eingabe);
-            Formen.Umrandung(g, r, Theme.S(8), offen ? Theme.Akzent : hover ? Theme.Gedaempft : Theme.EingabeRand, offen ? 1.5f : 1f);
-            int icon = Theme.S(14);
-            Lucide.Zeichne(g, offen ? "chevron-up" : "chevron-down", new RectangleF(Width - icon - Theme.S(12), (Height - icon) / 2f, icon, icon), offen ? Theme.Akzent : Theme.Gedaempft);
-            TextRenderer.DrawText(g, wert, Font, new Rectangle(Theme.S(11), 0, Width - icon - Theme.S(28), Height), Theme.Text,
+            Formen.Eingabe(g, r, offen, Hover);
+            Formen.Aufklapppfeil(g, r, offen);
+            TextRenderer.DrawText(g, wert, Font, new Rectangle(Theme.S(11), 0, Width - Theme.S(11) - Formen.PfeilPlatz, Height), Theme.Text,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
-}
 
-namespace ShiftDesk
-{
+    // Schmale Bildlaufleiste im eigenen Design (statt der Windows-Leiste): dünner Griff, beim Darüberfahren
+    // breiter. Ziehen am Griff verschiebt, ein Klick daneben blättert um eine sichtbare Länge.
+    public class Bildlaufleiste : ThemaControl
+    {
+        public readonly bool Waagrecht;
+        int wert, gesamt, sichtbar;
+        int ziehStart = -1, ziehWert;
+
+        public event Action<int> Gescrollt;
+
+        public Bildlaufleiste(bool waagrecht)
+        {
+            Waagrecht = waagrecht;
+            Visible = false;
+            if (waagrecht) Height = Dicke; else Width = Dicke;
+        }
+
+        public static int Dicke
+        {
+            get { return Theme.S(10); }
+        }
+
+        int Maximum
+        {
+            get { return Math.Max(0, gesamt - sichtbar); }
+        }
+
+        int Laenge
+        {
+            get { return Waagrecht ? Width : Height; }
+        }
+
+        // gesamt: ganze Länge des Inhalts, sichtbar: davon sichtbar, wert: Anfang des sichtbaren Teils.
+        // Die Leiste ist nur sichtbar, wenn nicht alles Platz hat.
+        public void Setzen(int wert, int gesamt, int sichtbar)
+        {
+            wert = Math.Max(0, Math.Min(Math.Max(0, gesamt - sichtbar), wert));
+            bool noetig = sichtbar > 0 && gesamt > sichtbar;
+            if (noetig != Visible) Visible = noetig;
+            if (wert == this.wert && gesamt == this.gesamt && sichtbar == this.sichtbar) return;
+            this.wert = wert;
+            this.gesamt = gesamt;
+            this.sichtbar = sichtbar;
+            Invalidate();
+        }
+
+        void Griff(out float start, out float laenge)
+        {
+            laenge = Math.Min(Laenge, Math.Max(Theme.S(28), Laenge * (float)sichtbar / Math.Max(1, gesamt)));
+            start = Maximum == 0 ? 0 : (Laenge - laenge) * wert / Maximum;
+        }
+
+        // Griff zeichnen, auch für Inhalte, die ihre Leiste selbst malen (z. B. die Hinweise)
+        public static void Zeichnen(Graphics g, RectangleF bahn, float start, float laenge, bool waagrecht, bool aktiv)
+        {
+            float dicke = Theme.S(aktiv ? 8 : 4);
+            var r = waagrecht
+                ? new RectangleF(bahn.X + start, bahn.Y + (bahn.Height - dicke) / 2, laenge, dicke)
+                : new RectangleF(bahn.X + (bahn.Width - dicke) / 2, bahn.Y + start, dicke, laenge);
+            var glaettung = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Formen.Fuellen(g, r, dicke / 2, aktiv ? Theme.Gedaempft : Theme.SchalterAus);
+            g.SmoothingMode = glaettung;
+        }
+
+        void Melden(int neu)
+        {
+            neu = Math.Max(0, Math.Min(Maximum, neu));
+            if (neu == wert) return;
+            wert = neu;
+            Invalidate();
+            var h = Gescrollt;
+            if (h != null) h(neu);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                float s, l;
+                Griff(out s, out l);
+                int p = Waagrecht ? e.X : e.Y;
+                if (p >= s && p <= s + l)
+                {
+                    ziehStart = p;
+                    ziehWert = wert;
+                    Invalidate();
+                }
+                else Melden(wert + (p < s ? -sichtbar : sichtbar));
+            }
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (ziehStart >= 0)
+            {
+                float s, l;
+                Griff(out s, out l);
+                float proPixel = Maximum / Math.Max(1f, Laenge - l);
+                Melden(ziehWert + (int)Math.Round(((Waagrecht ? e.X : e.Y) - ziehStart) * proPixel));
+            }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            ziehStart = -1;
+            Invalidate();
+            base.OnMouseUp(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            float s, l;
+            Griff(out s, out l);
+            Zeichnen(e.Graphics, ClientRectangle, s, l, Waagrecht, Hover || ziehStart >= 0);
+        }
+    }
+
+    // Bereich mit senkrechtem Bildlauf (Mausrad oder eigene Leiste) für Inhalte, die höher werden
+    // können als der Platz. Die Höhe des Inhalts kommt aus dessen GetPreferredSize.
+    public class BildlaufPanel : Panel
+    {
+        readonly Control inhalt;
+        readonly Bildlaufleiste leiste = new Bildlaufleiste(false);
+        int versatz;
+
+        public BildlaufPanel(Control inhalt)
+        {
+            this.inhalt = inhalt;
+            DoubleBuffered = true;
+            Controls.Add(inhalt);
+            Controls.Add(leiste);
+            leiste.BringToFront();
+            leiste.Gescrollt += w => { versatz = w; Anordnen(); };
+        }
+
+        // Höhe, die der Inhalt bei dieser Breite ganz braucht
+        public int InhaltHoehe(int breite)
+        {
+            return inhalt.GetPreferredSize(new Size(Math.Max(1, breite), 0)).Height;
+        }
+
+        protected override void OnLayout(LayoutEventArgs e)
+        {
+            base.OnLayout(e);
+            Anordnen();
+        }
+
+        void Anordnen()
+        {
+            int breite = ClientSize.Width, hoehe = ClientSize.Height;
+            if (breite <= 0 || hoehe <= 0) return;
+            int h = InhaltHoehe(breite);
+            if (h > hoehe)
+            {
+                // Platz für die Leiste lassen
+                breite -= Bildlaufleiste.Dicke + Theme.S(4);
+                h = InhaltHoehe(breite);
+            }
+            versatz = Math.Max(0, Math.Min(Math.Max(0, h - hoehe), versatz));
+            var ziel = new Rectangle(0, -versatz, breite, h);
+            if (inhalt.Bounds != ziel) inhalt.Bounds = ziel;
+            leiste.Bounds = new Rectangle(ClientSize.Width - Bildlaufleiste.Dicke, 0, Bildlaufleiste.Dicke, hoehe);
+            leiste.Setzen(versatz, h, hoehe);
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            int vorher = versatz;
+            versatz -= Math.Sign(e.Delta) * Theme.S(60);
+            Anordnen();
+            var h = e as HandledMouseEventArgs;
+            if (h != null) h.Handled = versatz != vorher || leiste.Visible;
+            base.OnMouseWheel(e);
+        }
+    }
+
     // Blendet beim Seitenwechsel weich von der alten zur neuen Seite über
     public class Uebergang : Control
     {
-        const int Dauer = 180;   // Millisekunden
+        const int Dauer = 160;   // Millisekunden
         Bitmap vorher, nachher;
         readonly Timer timer = new Timer { Interval = 10 };
         DateTime start;

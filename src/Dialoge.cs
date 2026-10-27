@@ -54,7 +54,7 @@ namespace ShiftDesk
             this.symbol = symbol;
             this.farbe = farbe;
             Text = "ShiftDesk";
-            Font = new Font("Segoe UI", 9.5f);
+            Font = Schrift.Text;
             AutoScaleMode = AutoScaleMode.None;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = MinimizeBox = false;
@@ -67,7 +67,7 @@ namespace ShiftDesk
             int rand = Theme.S(24), breite = Theme.S(460);
             int textX = rand + Theme.S(40 + 16), textBreite = breite - textX - rand;
 
-            var lblTitel = TextLabel(titel, new Font("Segoe UI Semibold", 12f), Theme.Text, textX, rand, textBreite);
+            var lblTitel = TextLabel(titel, Schrift.Titel, Theme.Text, textX, rand, textBreite);
             int unten = lblTitel.Bottom;
             Controls.Add(lblTitel);
             if (!string.IsNullOrEmpty(text))
@@ -151,7 +151,7 @@ namespace ShiftDesk
             // Symbol im farbigen Kreis (rot = Gefahr, blau = Vorschlag/Info, gelb = Warnung, grün = Erfolg)
             g.SmoothingMode = SmoothingMode.AntiAlias;
             int d = Theme.S(40), icon = Theme.S(20), x = Theme.S(24), y = Theme.S(24);
-            using (var b = new SolidBrush(Color.FromArgb(Theme.Dunkel ? 48 : 26, farbe)))
+            using (var b = new SolidBrush(Theme.Toenung(farbe)))
                 g.FillEllipse(b, x, y, d, d);
             Lucide.Zeichne(g, symbol, new RectangleF(x + (d - icon) / 2f, y + (d - icon) / 2f, icon, icon), farbe);
         }

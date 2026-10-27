@@ -194,7 +194,7 @@ namespace ShiftDesk
             foreach (var e in unterbesetzt.OrderByDescending(e => e.Key))
             {
                 var zeiten = e.Value.Take(8).Select(t => plan.Start.AddHours(t).ToString("ddd dd.MM. HH:00", De));
-                plan.Warnungen.Insert(0, (cfg.Posten[e.Key].Pflicht ? "Pflichtposten «" : "Posten «") + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
+                plan.Warnungen.Insert(0, "Posten «" + cfg.Posten[e.Key].Name + "» ist in " + e.Value.Count +
                     " Stunde(n) nicht voll besetzt: " + string.Join(", ", zeiten) + (e.Value.Count > 8 ? " …" : ""));
             }
             foreach (var e in ohneFahrer.OrderByDescending(e => e.Key))
@@ -286,8 +286,8 @@ namespace ShiftDesk
             // Plätze: Posten k mit Grösse g (2 = Doppelplatz für ein Team, 1 = Einzelplatz).
             // Doppelplätze nur so viele, wie Teams da sind, die den Posten besetzen dürfen (und insgesamt nicht mehr
             // als Teams); der Rest sind Einzelplätze (z. B. Fahrerposten, wenn die Fahrer einzeln sind).
-            // leer[j]: Kosten, wenn der Platz unbesetzt bleibt. Pflichtposten werden vor allen anderen besetzt,
-            // sonst gilt die Reihenfolge (weiter oben = wichtiger).
+            // leer[j]: Kosten, wenn der Platz unbesetzt bleibt. Alle Posten sollen voll besetzt sein; reichen die
+            // Leute nicht, gilt die Reihenfolge (weiter oben = wichtiger).
             // nurFahrer[j]: der erste Platz eines Fahrerpostens ist für einen Fahrer reserviert (er ist auch der
             // wichtigste); die weiteren Plätze bekommen Fahrer, wenn welche da sind, sonst andere Leute.
             var plaetze = new List<int>();
@@ -295,9 +295,8 @@ namespace ShiftDesk
             var leer = new List<double>();
             var nurFahrer = new List<bool>();
             int paareUebrig = einheiten.Count(e => e.Length == 2);
-            // Pflichtposten zuerst (sie bekommen auch die Teams zuerst), dann die Reihenfolge der Tabelle
-            var reihenfolge = Enumerable.Range(0, cfg.Posten.Count).OrderBy(k => cfg.Posten[k].Pflicht ? 0 : 1).ThenBy(k => k).ToList();
-            foreach (int k in reihenfolge)
+            // in der Reihenfolge der Tabelle (die oberen bekommen auch die Teams zuerst)
+            for (int k = 0; k < cfg.Posten.Count; k++)
             {
                 var p = cfg.Posten[k];
                 if (p.Typ == PostenTyp.Auffang || !p.OffenUm(h)) continue;
@@ -305,7 +304,7 @@ namespace ShiftDesk
                 int doppel = Math.Min(Math.Min(p.Anzahl / 2, paareUebrig), einheiten.Count(e => e.Length == 2 && erlaubtFuer(e, p)
                     && (p.Typ != PostenTyp.Fahrer || e.All(r => plan.Zeilen[r].Fahrer))));
                 paareUebrig -= doppel;
-                double basis = p.Pflicht ? 4 * LEER : LEER;
+                double basis = LEER;
                 for (int i = 0; i < doppel; i++) { plaetze.Add(k); groesse.Add(2); nurFahrer.Add(false); leer.Add(p.Typ == PostenTyp.Fahrer && i == 0 ? 2 * basis : basis); }
                 for (int i = 0; i < p.Anzahl - 2 * doppel; i++)
                 {

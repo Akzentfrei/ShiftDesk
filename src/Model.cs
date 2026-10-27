@@ -48,10 +48,19 @@ namespace ShiftDesk
         public int OffenBis;
         public PostenTyp Typ = PostenTyp.Normal;
         public bool EssenMoeglich;
-        public bool AmStueck;                               // gleiche Person bleibt möglichst auf dem Posten
         public bool Draussen;                               // im Freien: niemand soll zu lange am Stück draussen sein
-        public bool Pflicht;                                // muss immer voll besetzt sein, wird vor allen anderen Posten besetzt
         public List<string> Funktionen = new List<string>(); // leer = alle Funktionen
+
+        // Wacht Kdt und Stv bleiben möglichst am Stück: der Posten Wacht Kdt und jeder Posten nur für Kdt-Funktionen.
+        // Alle Posten müssen voll besetzt sein; bei zu wenig Leuten entscheidet die Reihenfolge.
+        public bool AmStueck
+        {
+            get
+            {
+                return string.Equals((Name ?? "").Trim(), Konfiguration.Pflichtposten[0], StringComparison.OrdinalIgnoreCase)
+                    || (Funktionen.Count > 0 && Funktionen.All(f => f.IndexOf("Kdt", StringComparison.OrdinalIgnoreCase) >= 0));
+            }
+        }
 
         public bool OffenUm(int stunde)
         {
@@ -110,7 +119,7 @@ namespace ShiftDesk
                 switch (i)
                 {
                     case 0:
-                        neu = new Posten { Name = name, Farbe = Color.FromArgb(79, 173, 234).ToArgb(), Anzahl = 1, AmStueck = true,
+                        neu = new Posten { Name = name, Farbe = Color.FromArgb(79, 173, 234).ToArgb(), Anzahl = 1,
                             Funktionen = Funktionen.Where(f => f.Name.IndexOf("Kdt", StringComparison.OrdinalIgnoreCase) >= 0).Select(f => f.Name).ToList() };
                         break;
                     case 1:
@@ -120,7 +129,6 @@ namespace ShiftDesk
                         neu = new Posten { Name = name, Farbe = Color.FromArgb(13, 148, 136).ToArgb(), Anzahl = 2, EssenMoeglich = true };
                         break;
                 }
-                neu.Pflicht = true;
                 Posten.Insert(Math.Min(i, Posten.Count), neu);
             }
         }
@@ -134,7 +142,7 @@ namespace ShiftDesk
         }
 
         // Dateiversion: 0 = von vor den frei definierbaren Funktionen und Graden (Feld fehlt in der Datei),
-        // 2 = vor dem Schalter «Pflicht» (Pflichtposten werden beim Laden als Pflicht markiert),
+        // 2 = vor dem Schalter «Pflicht» (den es nicht mehr gibt, alle Posten sind Pflicht),
         // 3 = Einheit und Zweck waren noch im Namen zusammengefasst
         public const int AktuelleVersion = 4;
         public int Version;
@@ -181,12 +189,29 @@ namespace ShiftDesk
 
         public void Speichern(string pfad)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(pfad)));
+            pfad = Path.GetFullPath(pfad);
+            Directory.CreateDirectory(Path.GetDirectoryName(pfad));
             var ser = new XmlSerializer(typeof(Konfiguration));
             Zweck = null;
             Version = AktuelleVersion;
-            using (var fs = File.Create(pfad))
+            // erst ganz in eine Hilfsdatei schreiben und dann austauschen: bricht das Schreiben ab
+            // (Absturz, voller Datenträger), bleibt die bisherige Datei unversehrt
+            string neu = pfad + ".neu";
+            using (var fs = File.Create(neu))
                 ser.Serialize(fs, this);
+            if (!File.Exists(pfad))
+            {
+                File.Move(neu, pfad);
+                return;
+            }
+            try { File.Replace(neu, pfad, null); }
+            catch (Exception ex)
+            {
+                // z. B. auf Netzlaufwerken oder USB-Sticks ohne NTFS
+                if (!(ex is IOException || ex is PlatformNotSupportedException || ex is UnauthorizedAccessException)) throw;
+                File.Copy(neu, pfad, true);
+                File.Delete(neu);
+            }
         }
 
         public static Konfiguration Laden(string pfad)
@@ -205,9 +230,6 @@ namespace ShiftDesk
             if (k.Einheit == null) k.Einheit = "";
             if (Druck.Sprachen.All(x => x.Kuerzel != k.Sprache)) k.Sprache = "de";
             if (k.Version < 2) k.AeltereVersionUebernehmen();
-            if (k.Version < 3)
-                foreach (var p in k.Posten.Where(p => IstPflichtposten(p.Name)))
-                    p.Pflicht = true;
             k.Version = AktuelleVersion;
             k.PflichtpostenErgaenzen();
             return k;
@@ -228,7 +250,6 @@ namespace ShiftDesk
                     if (p.Typ == PostenTyp.Wachtkdt)
                     {
                         p.Typ = PostenTyp.Normal;
-                        p.AmStueck = true;
                         p.Funktionen = new List<string> { "Wacht Kdt" };
                     }
                     else if (p.Funktionen.Count == 0)
@@ -273,9 +294,9 @@ namespace ShiftDesk
                 k.Personen.Add(new Person { Grad = "Rekr", Name = fahrer[g], Funktion = "Wache", Gruppe = "Gruppe " + (g + 1), Fahrer = true });
 
             var wache = new List<string> { "Wache" };
-            k.Posten.Add(new Posten { Name = "Wacht Kdt", Farbe = Color.FromArgb(79, 173, 234).ToArgb(), Anzahl = 1, AmStueck = true, Pflicht = true, Funktionen = new List<string> { "Wacht Kdt", "Wacht Kdt Stv" } });
-            k.Posten.Add(new Posten { Name = "Presto", Farbe = Color.FromArgb(234, 88, 12).ToArgb(), Anzahl = 2, Typ = PostenTyp.Fahrer, Pflicht = true, EssenMoeglich = true, Funktionen = wache.ToList() });
-            k.Posten.Add(new Posten { Name = "Subito", Farbe = Color.FromArgb(13, 148, 136).ToArgb(), Anzahl = 2, Pflicht = true, EssenMoeglich = true, Funktionen = wache.ToList() });
+            k.Posten.Add(new Posten { Name = "Wacht Kdt", Farbe = Color.FromArgb(79, 173, 234).ToArgb(), Anzahl = 1, Funktionen = new List<string> { "Wacht Kdt", "Wacht Kdt Stv" } });
+            k.Posten.Add(new Posten { Name = "Presto", Farbe = Color.FromArgb(234, 88, 12).ToArgb(), Anzahl = 2, Typ = PostenTyp.Fahrer, EssenMoeglich = true, Funktionen = wache.ToList() });
+            k.Posten.Add(new Posten { Name = "Subito", Farbe = Color.FromArgb(13, 148, 136).ToArgb(), Anzahl = 2, EssenMoeglich = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Kdo", Farbe = Color.FromArgb(46, 112, 190).ToArgb(), Anzahl = 1, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Haupteingang", Farbe = Color.FromArgb(178, 34, 34).ToArgb(), Anzahl = 2, OffenVon = 7, OffenBis = 22, Draussen = true, Funktionen = wache.ToList() });
             k.Posten.Add(new Posten { Name = "Amiti", Farbe = Color.FromArgb(76, 168, 80).ToArgb(), Anzahl = 2, OffenVon = 7, OffenBis = 23, Funktionen = wache.ToList() });

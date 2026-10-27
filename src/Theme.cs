@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -34,6 +35,18 @@ namespace ShiftDesk
         public static int S(float px)
         {
             return (int)Math.Round(px * Skala);
+        }
+
+        // Einheitliche Masse: Eingabefelder, Knöpfe, Ecken
+        public static int FeldHoehe { get { return S(38); } }
+        public static int KnopfHoehe { get { return S(36); } }
+        public static int RadiusFeld { get { return S(8); } }
+        public static int RadiusKarte { get { return S(12); } }
+
+        // Leichte Hinterlegung in einer Farbe (Symbolkreis, Status, Gefahr beim Darüberfahren)
+        public static Color Toenung(Color farbe, bool staerker = false)
+        {
+            return Color.FromArgb((Dunkel ? 48 : 26) + (staerker ? 18 : 0), farbe);
         }
 
         static bool SystemDunkel()
@@ -116,9 +129,6 @@ namespace ShiftDesk
         [DllImport("dwmapi.dll")]
         static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int wert, int groesse);
 
-        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
-        static extern int SetWindowTheme(IntPtr hwnd, string app, string liste);
-
         // Dunkle Titelleiste ab Windows 10 20H1 (Attribut 20), ältere Builds kennen 19.
         public static void Titelleiste(Form f)
         {
@@ -139,13 +149,37 @@ namespace ShiftDesk
             try { DwmSetWindowAttribute(hwnd, 33, ref klein, 4); }
             catch { }
         }
+    }
 
-        // Bildlaufleisten passend zum Farbmodus
-        public static void Bildlauf(Control c)
+    // Schriften: eine feste Abstufung für die ganze Oberfläche (nicht pro Steuerelement neu erzeugen)
+    public static class Schrift
+    {
+        public static readonly Font Seitentitel = new Font("Segoe UI Semibold", 19f);
+        public static readonly Font Titel = new Font("Segoe UI Semibold", 12.5f);
+        public static readonly Font Ueberschrift = new Font("Segoe UI Semibold", 10f);
+        public static readonly Font Eingabe = new Font("Segoe UI", 10f);
+        public static readonly Font Text = new Font("Segoe UI", 9.5f);
+        public static readonly Font Fett = new Font("Segoe UI Semibold", 9.5f);
+        public static readonly Font Klein = new Font("Segoe UI", 9f);
+        public static readonly Font KleinFett = new Font("Segoe UI Semibold", 9f);
+        public static readonly Font Beschriftung = new Font("Segoe UI Semibold", 8.5f);
+        public static readonly Font Abschnitt = new Font("Segoe UI Semibold", 7.5f);
+    }
+
+    // Eingebettete Bilder (Logo, Armee-Logo), einmal geladen
+    public static class Bilder
+    {
+        static readonly Dictionary<string, Image> geladen = new Dictionary<string, Image>();
+
+        public static Image Laden(string name)
         {
-            if (!c.IsHandleCreated) return;
-            try { SetWindowTheme(c.Handle, Dunkel ? "DarkMode_Explorer" : "Explorer", null); }
-            catch { }
+            Image bild;
+            if (geladen.TryGetValue(name, out bild)) return bild;
+            // der Strom muss offen bleiben, solange das Bild lebt
+            var s = typeof(Bilder).Assembly.GetManifestResourceStream("ShiftDesk." + name);
+            bild = s == null ? null : Image.FromStream(s);
+            geladen[name] = bild;
+            return bild;
         }
     }
 }

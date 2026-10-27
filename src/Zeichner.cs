@@ -58,6 +58,12 @@ namespace ShiftDesk
         static readonly Color Leer = Color.FromArgb(243, 244, 246);
         static readonly Color Schnee = Color.FromArgb(37, 99, 235);
 
+        // Textausrichtungen, einmal erzeugt und für jede Seite wiederverwendet
+        static readonly StringFormat links = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+        static readonly StringFormat rechtsMitte = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+        static readonly StringFormat mitte = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
+        static readonly StringFormat stundeTh = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
+
         public static void Seite(Graphics g, RectangleF b, Plan plan, int seite)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -70,10 +76,6 @@ namespace ShiftDesk
             int stunden = Math.Min(24, plan.Stunden - erste);
             DateTime von = plan.Start.AddHours(erste);
             DateTime bis = von.AddHours(stunden);
-
-            var links = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-            var rechtsMitte = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-            var mitte = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
 
             using (var tText = new SolidBrush(TextFarbe))
             using (var tGrau = new SolidBrush(Grau))
@@ -96,7 +98,7 @@ namespace ShiftDesk
 
                 // Logo oben links, darunter der Titel; Felder und Legende über dem Raster
                 float oben = b.Top;
-                var logo = ArmeeLogo;
+                var logo = Bilder.Laden("armee-logo.png");
                 if (logo != null)
                 {
                     float lh = 30 * u;
@@ -288,7 +290,6 @@ namespace ShiftDesk
                 g.DrawRectangle(dick, b.Left, tabOben, b.Width, tabUnten - tabOben);
 
                 // Stunden erst jetzt, mit einer Lücke in den Linien dahinter (Anfang, Mitternacht, Ende)
-                var stundeTh = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
                 for (int c = 0; c <= stunden; c++)
                 {
                     DateTime z = von.AddHours(c);
@@ -380,21 +381,6 @@ namespace ShiftDesk
                 g.DrawString(string.Format(t.Erstellt, DateTime.Now.ToString("dd.MM.yyyy HH:mm")), fKlein, tGrau, new RectangleF(b.Left, fy, b.Width / 2, fussH), links);
                 if (plan.Seiten > 1)
                     g.DrawString(string.Format(t.Seite, seite + 1, plan.Seiten), fKlein, tGrau, new RectangleF(b.Left, fy, b.Width, fussH), mitte);
-            }
-        }
-
-        static Image armeeLogo;
-
-        static Image ArmeeLogo
-        {
-            get
-            {
-                if (armeeLogo == null)
-                {
-                    var s = typeof(Zeichner).Assembly.GetManifestResourceStream("ShiftDesk.armee-logo.png");
-                    if (s != null) armeeLogo = Image.FromStream(s);
-                }
-                return armeeLogo;
             }
         }
 
