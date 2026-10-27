@@ -106,6 +106,9 @@ namespace ShiftDesk
                     e.Handled = e.SuppressKeyPress = true;
                 }
             };
+            g.ShowCellToolTips = false;
+            tippTimer.Tick += (s, e) => TippZeigen();
+            g.Disposed += (s, e) => { tippTimer.Dispose(); tipp.Dispose(); };
             g.Scroll += (s, e) => Schliessen(true);
             g.SizeChanged += (s, e) => Schliessen(true);
             g.ColumnWidthChanged += (s, e) => Schliessen(true);
@@ -127,6 +130,7 @@ namespace ShiftDesk
             hoverZelle = z;
             hoverKnopf = -1;
             hoverZeile = z != null ? z.RowIndex : -1;
+            TippPlanen(z);
             if (alteZeile != hoverZeile)
             {
                 if (alteZeile >= 0 && alteZeile < g.RowCount) g.InvalidateRow(alteZeile);
@@ -137,6 +141,39 @@ namespace ShiftDesk
                 if (alt != null && alt.RowIndex >= 0 && alt.RowIndex < g.RowCount) g.InvalidateCell(alt);
                 if (z != null) g.InvalidateCell(z);
             }
+        }
+
+        // Abgeschnittener Zellentext erscheint nach kurzem Verweilen ganz (eigener Tooltip statt dem von Windows)
+        readonly ThemaTipp tipp = new ThemaTipp();
+        readonly Timer tippTimer = new Timer { Interval = 500 };
+        DataGridViewCell tippZelle;
+
+        void TippPlanen(DataGridViewCell z)
+        {
+            tippTimer.Stop();
+            tipp.Verbergen(g);
+            tippZelle = z;
+            if (z != null) tippTimer.Start();
+        }
+
+        void TippZeigen()
+        {
+            tippTimer.Stop();
+            var z = tippZelle;
+            if (z == null || z.RowIndex < 0 || z.RowIndex >= g.RowCount || z == editZelle || z == offeneZelle) return;
+            var info = Info(z.OwningColumn);
+            if (info == null || info.Art == SpaltenArt.Aktionen || info.Art == SpaltenArt.Schalter || info.Art == SpaltenArt.Farbe) return;
+            string wert = WertText(z);
+            string text = info.Anzeige != null ? info.Anzeige(wert) : wert;
+            if (string.IsNullOrEmpty(text)) return;
+            // gleiche Aufteilung wie beim Zeichnen
+            var feld = Feld(g.GetCellDisplayRectangle(z.ColumnIndex, z.RowIndex, false));
+            int icon = Theme.S(14), rechts = feld.Right - Theme.S(10);
+            if (info.Art == SpaltenArt.Auswahl || info.Art == SpaltenArt.Mehrfach) rechts -= icon + Theme.S(6);
+            if (info.Symbol != null && info.Symbol(z.OwningRow) != null) rechts -= icon + Theme.S(6);
+            int platz = rechts - feld.X - Theme.S(10);
+            if (TextRenderer.MeasureText(text, g.DefaultCellStyle.Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width <= platz) return;
+            tipp.Zeigen(text, g, new Point(feld.X, feld.Bottom + Theme.S(4)));
         }
 
         // Das Eingabefeld innerhalb einer Zelle
@@ -294,6 +331,7 @@ namespace ShiftDesk
             var info = Info(g.Columns[spalte]);
             if (info == null) return;
             Schliessen(true);
+            TippPlanen(null);
             var zelle = g[spalte, zeile];
             var feld = Feld(g.GetCellDisplayRectangle(spalte, zeile, false));
 
@@ -347,25 +385,34 @@ namespace ShiftDesk
                 case SpaltenArt.Farbe:
                 {
                     if (Popup.GeradeGeschlossen(zelle)) break;
-                    var aktuell = zelle.Tag is Color ? (Color)zelle.Tag : Color.Gray;
-                    var palette = new FarbAuswahl(aktuell);
-                    var popup = new Popup(palette);
-                    palette.Gewaehlt += c => { zelle.Tag = c; popup.Close(); Melden(); };
-                    palette.WeitereFarben += () =>
-                    {
-                        popup.Close();
-                        using (var dlg = new ColorDialog { Color = aktuell, FullOpen = true })
-                            if (dlg.ShowDialog(g.FindForm()) == DialogResult.OK)
-                            {
-                                zelle.Tag = dlg.Color;
-                                g.InvalidateCell(zelle);
-                                Melden();
-                            }
-                    };
-                    AufklappenBei(zelle, popup, feld);
+                    FarbPalette(zelle, feld);
                     break;
                 }
             }
+        }
+
+        static Color Farbe(DataGridViewCell zelle)
+        {
+            return zelle.Tag is Color ? (Color)zelle.Tag : Color.Gray;
+        }
+
+        void FarbPalette(DataGridViewCell zelle, Rectangle feld)
+        {
+            var palette = new FarbAuswahl(Farbe(zelle));
+            var popup = new Popup(palette);
+            palette.Gewaehlt += c => { zelle.Tag = c; popup.Close(); Melden(); };
+            palette.WeitereFarben += () => { popup.Close(); FarbMischen(zelle, feld); };
+            AufklappenBei(zelle, popup, feld);
+        }
+
+        // «Eigene Farbe…»: freie Wahl am gleichen Ort, «Palette» führt zurück
+        void FarbMischen(DataGridViewCell zelle, Rectangle feld)
+        {
+            var mischer = new FarbMischer(Farbe(zelle));
+            var popup = new Popup(mischer);
+            mischer.Gewaehlt += c => { zelle.Tag = c; popup.Close(); Melden(); };
+            mischer.Zurueck += () => { popup.Close(); FarbPalette(zelle, feld); };
+            AufklappenBei(zelle, popup, feld);
         }
 
         void AufklappenBei(DataGridViewCell zelle, Popup popup, Rectangle feld)

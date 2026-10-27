@@ -210,7 +210,7 @@ namespace ShiftDesk
             var unten = new List<Control> { new Abschnitt("Datei") };
             var untenPanel = new Panel { Dock = DockStyle.Bottom };
             var kompakt = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = Theme.S(46), WrapContents = false, Padding = new Padding(Theme.S(4), Theme.S(8), 0, 0), Visible = false };
-            var tipp = new ToolTip();
+            var tipp = new ThemaTipp();
             Action anpassen = null;
             foreach (var a in aktionen)
             {
@@ -609,6 +609,7 @@ namespace ShiftDesk
                 EnableHeadersVisualStyles = false,
                 SelectionMode = DataGridViewSelectionMode.CellSelect,
                 EditMode = DataGridViewEditMode.EditOnEnter,
+                ShowCellToolTips = false,   // keine Windows-Tooltips; abgeschnittene Texte zeigt der TabellenEditor selbst
             };
             typeof(DataGridView).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(g, true, null);
             g.RowTemplate.Height = Theme.S(42);
@@ -1143,7 +1144,7 @@ namespace ShiftDesk
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "Plan erstellen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Meldung.Warnung(this, "Plan kann nicht erstellt werden", ex.Message);
                 return;
             }
             seite = 0;
@@ -1353,7 +1354,7 @@ namespace ShiftDesk
         bool PlanVorhanden()
         {
             if (plan != null) return true;
-            MessageBox.Show(this, "Bitte zuerst auf «Plan erstellen» klicken.", "ShiftDesk", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Meldung.Info(this, "Noch kein Plan", "Bitte zuerst auf «Plan erstellen» klicken.");
             return false;
         }
 
@@ -1365,7 +1366,7 @@ namespace ShiftDesk
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 try { pd.Print(); }
-                catch (Exception ex) { MessageBox.Show(this, ex.Message, "Drucken", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+                catch (Exception ex) { Meldung.Fehler(this, "Drucken fehlgeschlagen", ex.Message); }
             }
         }
 
@@ -1383,8 +1384,8 @@ namespace ShiftDesk
                 {
                     if (!pd.PrinterSettings.IsValid)
                     {
-                        MessageBox.Show(this, "Der Drucker «Microsoft Print to PDF» ist auf diesem PC nicht installiert. Bitte «Drucken» verwenden.",
-                            "Als PDF", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        Meldung.Warnung(this, "PDF-Drucker fehlt",
+                            "Der Drucker «Microsoft Print to PDF» ist auf diesem PC nicht installiert. Bitte «Drucken» verwenden.");
                         return;
                     }
                     pd.PrinterSettings.PrintToFile = true;
@@ -1396,11 +1397,11 @@ namespace ShiftDesk
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(this, ex.Message, "Als PDF", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        Meldung.Fehler(this, "PDF konnte nicht gespeichert werden", ex.Message);
                         return;
                     }
                 }
-                if (Frage("PDF gespeichert:\n" + dlg.FileName + "\n\nJetzt öffnen?"))
+                if (JetztOeffnen("PDF gespeichert", dlg.FileName))
                 {
                     for (int i = 0; i < 50 && !File.Exists(dlg.FileName); i++)
                         System.Threading.Thread.Sleep(100);
@@ -1426,11 +1427,11 @@ namespace ShiftDesk
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(this, "Die Excel-Datei konnte nicht gespeichert werden:\n" + ex.Message + "\n\nIst sie vielleicht noch in Excel geöffnet?",
-                        "Excel", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Meldung.Fehler(this, "Excel-Datei konnte nicht gespeichert werden",
+                        ex.Message + "\n\nIst sie vielleicht noch in Excel geöffnet?");
                     return;
                 }
-                if (Frage("Excel-Datei gespeichert:\n" + dlg.FileName + "\n\nJetzt öffnen?"))
+                if (JetztOeffnen("Excel-Datei gespeichert", dlg.FileName))
                     try { System.Diagnostics.Process.Start(dlg.FileName); }
                     catch { }
             }
@@ -1458,7 +1459,7 @@ namespace ShiftDesk
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Die Datei konnte nicht geöffnet werden:\n" + ex.Message, "Öffnen", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Meldung.Fehler(this, "Datei konnte nicht geöffnet werden", ex.Message);
             }
         }
 
@@ -1479,7 +1480,7 @@ namespace ShiftDesk
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Speichern fehlgeschlagen:\n" + ex.Message, "Speichern", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Meldung.Fehler(this, "Speichern fehlgeschlagen", ex.Message);
             }
         }
 
@@ -1495,9 +1496,9 @@ namespace ShiftDesk
             Text = dateiPfad == null ? "ShiftDesk" : Path.GetFileNameWithoutExtension(dateiPfad) + " – ShiftDesk";
         }
 
-        bool Frage(string text)
+        bool JetztOeffnen(string titel, string pfad)
         {
-            return MessageBox.Show(this, text, "ShiftDesk", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+            return GefahrDialog.Vorschlagen(this, titel, pfad + "\n\nJetzt öffnen?", "Öffnen", "file-check");
         }
     }
 }

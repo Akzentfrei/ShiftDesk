@@ -40,6 +40,9 @@ namespace ShiftDesk
             { "check", "<path d='M20 6 9 17l-5-5'/>" },
             { "id-card", "<path d='M16 10h2'/><path d='M16 14h2'/><path d='M6.17 15a3 3 0 0 1 5.66 0'/><circle cx='9' cy='11' r='2'/><rect x='2' y='5' width='20' height='14' rx='2'/>" },
             { "file-spreadsheet", "<path d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/><path d='M14 2v4a2 2 0 0 0 2 2h4'/><path d='M8 13h2'/><path d='M14 13h2'/><path d='M8 17h2'/><path d='M14 17h2'/>" },
+            { "info", "<circle cx='12' cy='12' r='10'/><path d='M12 16v-4'/><path d='M12 8h.01'/>" },
+            { "circle-x", "<circle cx='12' cy='12' r='10'/><path d='m15 9-6 6'/><path d='m9 9 6 6'/>" },
+            { "file-check", "<path d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/><path d='M14 2v4a2 2 0 0 0 2 2h4'/><path d='m9 15 2 2 4-4'/>" },
         };
     }
 }

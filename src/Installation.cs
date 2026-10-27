@@ -118,7 +118,7 @@ namespace ShiftDesk
                 });
                 if (installierteOffen)
                 {
-                    MessageBox.Show("ShiftDesk ist noch geöffnet. Bitte zuerst schliessen und dann erneut installieren.", "ShiftDesk installieren", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Meldung.Info(null, "ShiftDesk ist noch geöffnet", "Bitte zuerst schliessen und dann erneut installieren.");
                     return false;
                 }
             }
@@ -152,12 +152,12 @@ namespace ShiftDesk
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Die Installation ist fehlgeschlagen:\n" + ex.Message, "ShiftDesk installieren", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Meldung.Fehler(null, "Die Installation ist fehlgeschlagen", ex.Message);
                 return false;
             }
             if (!leise)
-                MessageBox.Show("ShiftDesk ist installiert.\n\nDu findest es jetzt im Startmenü und über die Windows-Suche. " +
-                    "Deinstallieren kannst du es unter Einstellungen → Apps.", "ShiftDesk installieren", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Meldung.Erfolg(null, "ShiftDesk ist installiert", "Du findest es jetzt im Startmenü und über die Windows-Suche. " +
+                    "Deinstallieren kannst du es unter Einstellungen → Apps.");
             return true;
         }
 
@@ -232,7 +232,7 @@ namespace ShiftDesk
             if (AndereInstanzLaeuft())
             {
                 if (leise) return;
-                MessageBox.Show("ShiftDesk ist noch geöffnet. Bitte zuerst schliessen und dann erneut deinstallieren.", "ShiftDesk deinstallieren", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Meldung.Info(null, "ShiftDesk ist noch geöffnet", "Bitte zuerst schliessen und dann erneut deinstallieren.");
                 return;
             }
             bool datenLoeschen = !leise && Directory.Exists(Datenordner) &&
@@ -255,7 +255,7 @@ namespace ShiftDesk
                 });
 
             if (!leise)
-                MessageBox.Show("ShiftDesk wurde deinstalliert.", "ShiftDesk deinstallieren", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Meldung.Erfolg(null, "ShiftDesk wurde deinstalliert");
         }
     }
 }
