@@ -14,7 +14,8 @@ So installierst du ShiftDesk (Windows 10 oder 11, keine Administratorrechte nöt
 4. ShiftDesk fragt, ob es installiert werden soll: «Installieren» wählen.
 
 Danach findest du ShiftDesk im Startmenü und über die Windows-Suche. Die entpackte Datei
-kannst du anschliessend löschen.
+und ältere ShiftDesk-Dateien in Downloads und auf dem Desktop räumt ShiftDesk selbst weg,
+damit es nur eine Version auf dem PC gibt.
 
 Ohne Installation: In Schritt 4 «Ohne Installation starten» wählen. Dann läuft ShiftDesk
 direkt aus dem Ordner, in dem es liegt (z. B. auf einem USB-Stick).
@@ -23,4 +24,5 @@ Deinstallieren: Einstellungen → Apps → ShiftDesk → Deinstallieren.
 Pläne, die du als .shiftdesk-Datei gespeichert hast, bleiben dabei erhalten.
 
 Neue Version: einfach die neue ShiftDesk.exe starten. Sie bietet an, die installierte
-Version zu aktualisieren.
+Version zu aktualisieren. Startest du später versehentlich eine alte Datei, öffnet sich
+trotzdem die installierte, neueste Version.

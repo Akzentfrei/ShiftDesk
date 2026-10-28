@@ -9,8 +9,8 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Ablöseplanung")]
 [assembly: AssemblyCompany("ShiftDesk")]
 [assembly: AssemblyCopyright("© 2026 Ronny Riner")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace ShiftDesk
 {
@@ -24,6 +24,7 @@ namespace ShiftDesk
         // ShiftDesk.exe /install [/quiet]    installiert für den aktuellen Benutzer
         // ShiftDesk.exe /uninstall [/quiet]  deinstalliert wieder
         // ShiftDesk.exe "Plan.shiftdesk"     öffnet die Datei (Doppelklick im Explorer)
+        // ShiftDesk.exe /entfernen "Pfad" [/quiet]  löscht die Kopie in Downloads usw., die diese Version gestartet hat
         [STAThread]
         static void Main(string[] args)
         {
@@ -33,6 +34,13 @@ namespace ShiftDesk
 
             var a = args.Select(x => x.ToLowerInvariant()).ToList();
             bool leise = a.Contains("/quiet");
+            int entfernen = a.IndexOf(Installation.EntfernenSchalter);
+            if (entfernen >= 0 && entfernen + 1 < args.Length)
+            {
+                Installation.KopieEntfernen(args[entfernen + 1], leise);
+                if (leise) return;
+                args = args.Where((x, i) => i != entfernen && i != entfernen + 1).ToArray();
+            }
             if (a.Contains("/uninstall"))
             {
                 Installation.Deinstallieren(leise);
@@ -44,8 +52,9 @@ namespace ShiftDesk
                 return;
             }
             string datei = args.FirstOrDefault(x => !x.StartsWith("/") && System.IO.File.Exists(x));
-            // Wer die exe frisch bekommen hat, soll sie nicht aus dem Download-Ordner heraus benutzen müssen
-            if (datei == null && !a.Contains("/portable") && Installation.BeimStartAnbieten())
+            // Wer die exe frisch bekommen hat, soll sie nicht aus dem Download-Ordner heraus benutzen müssen,
+            // und auf dem PC soll nur die neueste Version liegen
+            if (!a.Contains("/portable") && Installation.BeimStart(datei))
                 return;
             Application.Run(new MainForm(datei));
         }

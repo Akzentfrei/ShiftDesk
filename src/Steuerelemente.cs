@@ -341,6 +341,7 @@ namespace ShiftDesk
     public class Marke : ThemaControl
     {
         public bool Schmal;
+        static readonly string Version = "v" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
 
         public Marke()
         {
@@ -366,6 +367,11 @@ namespace ShiftDesk
             if (Schmal) return;
             int x = (int)r.Right + Theme.S(14);
             TextRenderer.DrawText(g, "ShiftDesk", Schrift.Titel, new Point(x, y - Theme.S(3)), Theme.Text, TextFormatFlags.NoPadding);
+            // die Version klein hinter dem Namen, auf gleicher Grundlinie
+            Size titel = TextRenderer.MeasureText(g, "ShiftDesk", Schrift.Titel, Size.Empty, TextFormatFlags.NoPadding);
+            int klein = TextRenderer.MeasureText(g, Version, Schrift.Klein, Size.Empty, TextFormatFlags.NoPadding).Height;
+            TextRenderer.DrawText(g, Version, Schrift.Klein, new Point(x + titel.Width + Theme.S(6), y - Theme.S(3) + titel.Height - klein - Theme.S(2)),
+                Theme.Gedaempft, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, "Ablöseplanung", Schrift.Klein, new Point(x, y + Theme.S(21)), Theme.Gedaempft, TextFormatFlags.NoPadding);
         }
     }

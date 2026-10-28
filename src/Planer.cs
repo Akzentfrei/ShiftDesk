@@ -15,7 +15,7 @@ namespace ShiftDesk
         public int Stunden;
         public List<Person> Zeilen = new List<Person>();
         public int[] Block;       // Zeilen mit gleichen erlaubten Posten bilden einen Block (Abstand im Plan)
-        public int[] Team;        // Zeilen mit gleicher Nummer bilden ein festes Team und sind immer zusammen eingeteilt
+        public int[] Team;        // Zeilen mit gleicher Nummer bilden ein Zweierteam und sind wenn möglich zusammen eingeteilt
         public int[,] Z;          // [Zeile, Stunde] -> Postenindex, FREI oder RUHE
         public bool[,] Essen;     // [Zeile, Stunde] -> isst in dieser Stunde
         public bool[,] EssenAbloesung;   // [Zeile, Stunde] -> isst, eine Reserve löst kurz ab (kein Posten mit Essen frei)
@@ -42,6 +42,7 @@ namespace ShiftDesk
         readonly bool[] kannEssen;  // Funktion darf auf mindestens einen Posten mit Essen
         Gruppe[] gruppe;
         bool[] gegenteil;   // Wacht Kdt Stv: ruht, wenn die Gruppe (die des Wacht Kdt) im Dienst ist
+        List<int[]> einheitenBlock = new List<int[]>();   // Zusammensetzung der laufenden Ablösung (Teams und Einzelne)
 
         // Essensfenster der aktuellen Stunde
         bool essenAktiv;
@@ -305,12 +306,64 @@ namespace ShiftDesk
             }
         }
 
-        // Teilt die verfügbaren Personen einer Stunde den Posten zu (Ungarische Methode).
-        // Spalten: zu besetzende Plätze + je ein «Rest»-Platz pro Person (Auffangposten oder frei).
-        // Zusätzliche Leer-Zeilen erlauben es, Plätze unbesetzt zu lassen, wenn Leute fehlen.
-        // Zugeteilt werden Einheiten: ein Zweierteam, dessen beide Mitglieder verfügbar sind, zählt als eine Einheit
-        // der Grösse 2 und braucht auf dem Posten einen Doppelplatz; alle anderen sind Einheiten der Grösse 1.
+        // Ergebnis einer Zuteilung, bevor sie in den Plan übernommen wird
+        class Verteilung
+        {
+            public List<int[]> Einheiten = new List<int[]>();
+            public int[] Posten = new int[0];      // je Einheit: Postenindex, Auffangposten oder FREI
+            public bool[] HatPlatz = new bool[0];  // je Einheit: hat einen zu besetzenden Platz bekommen
+            public List<KeyValuePair<int, bool>> Unbesetzt = new List<KeyValuePair<int, bool>>();   // Posten, Fahrerplatz
+            public int LeereEinzelplaetze;
+            public double Kosten;
+        }
+
+        // Teilt die verfügbaren Personen einer Stunde den Posten zu.
+        // Zweierteams sind so oft wie möglich zusammen. Gehen die Leute nicht in Teams auf, sucht der Planer bei
+        // jeder Ablösung die beste Zusammensetzung: wer übrig bleibt, bildet mit einem anderen Übrigen ein Paar
+        // oder tritt an die Stelle eines Teammitglieds (das dann allein ist), und Teams, für die kein Posten mit
+        // zwei Plätzen frei ist, teilen sich auf zwei Einzelplätze auf (z. B. beide Zuko). Bis zur nächsten
+        // Ablösung bleibt die Zusammensetzung gleich.
         void Zuteilen(int t, int h, List<int> zeilen, Dictionary<int, List<int>> unterbesetzt, Dictionary<int, List<int>> ohneFahrer, bool fortsetzen)
+        {
+            // Durchschnitt pro Posten unter den Personen, die ihn besetzen dürfen
+            var schnitt = new double[cfg.Posten.Count];
+            for (int k = 0; k < cfg.Posten.Count; k++)
+            {
+                var erlaubt = zeilen.Where(r => Konfiguration.Darf(plan.Zeilen[r], cfg.Posten[k])).ToList();
+                schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
+            }
+
+            var basis = fortsetzen ? EinheitenFortsetzen(zeilen) : Teams(zeilen);
+            var beste = Verteilen(t, h, basis, schnitt, fortsetzen);
+            if (!fortsetzen && cfg.Zweierteams)
+                foreach (var variante in Varianten(basis))
+                {
+                    var v = Verteilen(t, h, variante, schnitt, fortsetzen);
+                    v.Kosten += TEAMWECHSEL;
+                    if (v.Kosten < beste.Kosten) beste = v;
+                }
+            einheitenBlock = beste.Einheiten;
+
+            for (int i = 0; i < beste.Einheiten.Count; i++)
+                foreach (int r in beste.Einheiten[i])
+                {
+                    int k = beste.Posten[i];
+                    plan.Z[r, t] = k;
+                    if (k >= 0) anzahl[r, k]++;
+                }
+            // Unbesetzte Plätze melden; der Fahrerplatz eines Fahrerpostens separat («ohne Fahrer»)
+            foreach (var u in beste.Unbesetzt)
+            {
+                var ziel = u.Value ? ohneFahrer : unterbesetzt;
+                List<int> liste;
+                if (!ziel.TryGetValue(u.Key, out liste))
+                    ziel[u.Key] = liste = new List<int>();
+                if (liste.Count == 0 || liste[liste.Count - 1] != t) liste.Add(t);
+            }
+        }
+
+        // Die Zweierteams aus der Personen-Tabelle, soweit beide Mitglieder verfügbar sind; alle anderen allein
+        List<int[]> Teams(List<int> zeilen)
         {
             var einheiten = new List<int[]>();
             var offen = new HashSet<int>(zeilen);
@@ -323,6 +376,89 @@ namespace ShiftDesk
                 else
                     einheiten.Add(new[] { r });
             }
+            return einheiten;
+        }
+
+        // Mitten in einer Ablösung gilt die Zusammensetzung von deren Beginn weiter. Wer seither in die Ruhe
+        // gegangen ist, fehlt; wer aus der Ruhe gekommen ist, kommt mit seinem Team dazu.
+        List<int[]> EinheitenFortsetzen(List<int> zeilen)
+        {
+            var frei = new HashSet<int>(zeilen);
+            var einheiten = new List<int[]>();
+            foreach (var e in einheitenBlock)
+            {
+                var da = e.Where(frei.Contains).ToArray();
+                if (da.Length == 0) continue;
+                einheiten.Add(da);
+                foreach (int r in da) frei.Remove(r);
+            }
+            einheiten.AddRange(Teams(zeilen.Where(frei.Contains).ToList()));
+            return einheiten;
+        }
+
+        // Andere Zusammensetzungen für eine Ablösung: zwei Übrige bilden ein Paar, oder ein Übriger tritt an die
+        // Stelle eines Teammitglieds, das dann allein ist. So kommt auch, wer übrig bleibt, auf Posten für zwei.
+        IEnumerable<List<int[]>> Varianten(List<int[]> basis)
+        {
+            Func<int, int, bool> passt = (a, b) => !plan.Zeilen[a].Fahrer && !plan.Zeilen[b].Fahrer
+                && plan.Zeilen[a].Funktion == plan.Zeilen[b].Funktion;
+            for (int i = 0; i < basis.Count; i++)
+            {
+                if (basis[i].Length != 1) continue;
+                int s = basis[i][0];
+                for (int j = 0; j < basis.Count; j++)
+                {
+                    if (j == i) continue;
+                    var e = basis[j];
+                    if (e.Length == 1 && j > i && passt(s, e[0]))
+                        yield return Ersetzt(basis, i, j, new[] { s, e[0] });
+                    else if (e.Length == 2 && passt(s, e[0]) && passt(s, e[1]))
+                    {
+                        yield return Ersetzt(basis, i, j, new[] { s, e[0] }, new[] { e[1] });
+                        yield return Ersetzt(basis, i, j, new[] { s, e[1] }, new[] { e[0] });
+                    }
+                }
+            }
+        }
+
+        static List<int[]> Ersetzt(List<int[]> einheiten, int weg1, int weg2, params int[][] dazu)
+        {
+            var neu = einheiten.Where((e, i) => i != weg1 && i != weg2).ToList();
+            neu.AddRange(dazu);
+            return neu;
+        }
+
+        // Rechnet eine Zusammensetzung durch. Bleiben Einzelplätze leer, während Teams keinen Platz haben, werden
+        // so viele dieser Teams aufgeteilt, wie es braucht.
+        Verteilung Verteilen(int t, int h, List<int[]> einheiten, double[] schnitt, bool fortsetzen)
+        {
+            var v = Durchrechnen(t, h, einheiten, schnitt, fortsetzen);
+            while (v.LeereEinzelplaetze > 0)
+            {
+                var aufteilen = Enumerable.Range(0, v.Einheiten.Count).Where(i => v.Einheiten[i].Length == 2 && !v.HatPlatz[i])
+                    .Take((v.LeereEinzelplaetze + 1) / 2).ToList();
+                if (aufteilen.Count == 0) break;
+                var neu = new List<int[]>();
+                for (int i = 0; i < v.Einheiten.Count; i++)
+                {
+                    if (aufteilen.Contains(i))
+                        neu.AddRange(v.Einheiten[i].Select(r => new[] { r }));
+                    else
+                        neu.Add(v.Einheiten[i]);
+                }
+                var w = Durchrechnen(t, h, neu, schnitt, fortsetzen);
+                if (w.Kosten >= v.Kosten) break;
+                v = w;
+            }
+            return v;
+        }
+
+        // Eine Zuteilung mit der Ungarischen Methode.
+        // Spalten: zu besetzende Plätze + je ein «Rest»-Platz pro Einheit (Auffangposten oder frei).
+        // Zusätzliche Leer-Zeilen erlauben es, Plätze unbesetzt zu lassen, wenn Leute fehlen.
+        // Ein Zweierteam ist eine Einheit der Grösse 2 und braucht auf dem Posten einen Doppelplatz.
+        Verteilung Durchrechnen(int t, int h, List<int[]> einheiten, double[] schnitt, bool fortsetzen)
+        {
             Func<int[], Posten, bool> erlaubtFuer = (e, p) => e.All(r => Konfiguration.Darf(plan.Zeilen[r], p));
 
             // Plätze: Posten k mit Grösse g (2 = Doppelplatz für ein Team, 1 = Einzelplatz).
@@ -361,19 +497,17 @@ namespace ShiftDesk
             // auf einen frei gewordenen Platz nach, und wer draussen die erlaubte Zeit erreicht hat, tauscht mit
             // jemandem von drinnen (Gesunderhaltung geht vor).
             int n = einheiten.Count, m = plaetze.Count, N = n + m;
-            if (N == 0) return;
+            var v = new Verteilung { Einheiten = einheiten, Posten = new int[n], HatPlatz = new bool[n] };
+            if (N == 0) return v;
 
-            // Durchschnitt pro Posten unter den Personen, die ihn besetzen dürfen
-            var schnitt = new double[cfg.Posten.Count];
-            for (int k = 0; k < cfg.Posten.Count; k++)
-            {
-                var erlaubt = zeilen.Where(r => Konfiguration.Darf(plan.Zeilen[r], cfg.Posten[k])).ToList();
-                schnitt[k] = erlaubt.Count == 0 ? 0 : erlaubt.Average(r => (double)anzahl[r, k]);
-            }
             var rest = einheiten.Select(e => cfg.Posten.FindIndex(p => p.Typ == PostenTyp.Auffang && p.OffenUm(h) && erlaubtFuer(e, p))).ToArray();
-            // Nicht-Fahrer auf dem Fahrerposten nur, wenn kein Fahrer frei ist (kleiner Aufschlag)
-            Func<int[], int, double> kostenEinheit = (e, k) => e.Sum(r => Kosten(r, k, t, schnitt, fortsetzen)
-                + (k >= 0 && cfg.Posten[k].Typ == PostenTyp.Fahrer && !plan.Zeilen[r].Fahrer ? NICHTFAHRER : 0));
+            // Kosten je Einheit und Posten (Nicht-Fahrer auf dem Fahrerposten nur, wenn kein Fahrer frei ist: kleiner Aufschlag)
+            var kostenPosten = new double[n, cfg.Posten.Count];
+            for (int i = 0; i < n; i++)
+                for (int k = 0; k < cfg.Posten.Count; k++)
+                    if (plaetze.Contains(k))
+                        kostenPosten[i, k] = einheiten[i].Sum(r => Kosten(r, k, t, schnitt, fortsetzen)
+                            + (cfg.Posten[k].Typ == PostenTyp.Fahrer && !plan.Zeilen[r].Fahrer ? NICHTFAHRER : 0));
 
             var kosten = new double[N, N];
             for (int i = 0; i < N; i++)
@@ -382,9 +516,9 @@ namespace ShiftDesk
                     if (i < n && j < m)
                         kosten[i, j] = groesse[j] == einheiten[i].Length && erlaubtFuer(einheiten[i], cfg.Posten[plaetze[j]])
                             && (!nurFahrer[j] || einheiten[i].All(r => plan.Zeilen[r].Fahrer))
-                            ? kostenEinheit(einheiten[i], plaetze[j]) : SPERRE;
+                            ? kostenPosten[i, plaetze[j]] : SPERRE;
                     else if (i < n)
-                        kosten[i, j] = kostenEinheit(einheiten[i], rest[i]);
+                        kosten[i, j] = einheiten[i].Sum(r => Kosten(r, rest[i], t, schnitt, fortsetzen));
                     else if (j < m)
                         kosten[i, j] = leer[j];
                     else
@@ -392,34 +526,29 @@ namespace ShiftDesk
                 }
 
             int[] wahl = Ungarisch(kosten, N);
+            for (int i = 0; i < N; i++) v.Kosten += kosten[i, wahl[i]];
             var besetzt = new bool[m];
             for (int i = 0; i < n; i++)
             {
                 int j = wahl[i];
-                int k = j < m ? plaetze[j] : rest[i];
+                v.HatPlatz[i] = j < m;
+                v.Posten[i] = j < m ? plaetze[j] : rest[i];
                 if (j < m) besetzt[j] = true;
-                foreach (int r in einheiten[i])
-                {
-                    plan.Z[r, t] = k;
-                    if (k >= 0) anzahl[r, k]++;
-                }
             }
-            // Unbesetzte Plätze melden; der Fahrerplatz eines Fahrerpostens separat («ohne Fahrer»)
             for (int j = 0; j < m; j++)
             {
                 if (besetzt[j]) continue;
-                int k = plaetze[j];
-                var ziel = nurFahrer[j] ? ohneFahrer : unterbesetzt;
-                List<int> liste;
-                if (!ziel.TryGetValue(k, out liste))
-                    ziel[k] = liste = new List<int>();
-                if (liste.Count == 0 || liste[liste.Count - 1] != t) liste.Add(t);
+                v.Unbesetzt.Add(new KeyValuePair<int, bool>(plaetze[j], nurFahrer[j]));
+                if (groesse[j] == 1) v.LeereEinzelplaetze++;
             }
+            return v;
         }
 
         const double NICHTFAHRER = 20;  // Nicht-Fahrer auf dem Fahrerposten: Fahrer gehen vor
         const double BLEIBEN = 30;    // Belohnung, mitten im Block auf dem Posten zu bleiben
-        const double DRAUSSEN = 80;   // Strafe, über die erlaubte Zeit hinaus draussen zu bleiben (> 2 × BLEIBEN, damit ein Tausch lohnt)
+        const double DRAUSSEN = 130;  // Strafe, über die erlaubte Zeit hinaus draussen zu bleiben (> 4 × BLEIBEN: auch ein Team,
+                                      // in dem nur einer zu lange draussen war, tauscht mit einem Team von drinnen)
+        const double TEAMWECHSEL = 4; // Strafe, wenn die Teams für eine Ablösung anders zusammengesetzt werden
 
         double Kosten(int r, int k, int t, double[] schnitt, bool fortsetzen)
         {

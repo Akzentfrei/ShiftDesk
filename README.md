@@ -25,9 +25,10 @@ Installation; alle Versionen stehen unter [Releases](https://github.com/Akzentfr
   die Posten Wacht Kdt, Presto und Subito gibt es immer. Alle Posten sollen voll besetzt sein, reichen die
   Leute nicht, entscheidet die Reihenfolge (unten bleibt zuerst leer). Wacht Kdt und Stv bleiben möglichst
   am Stück auf ihrem Posten
-- **Feste Zweierteams** (wahlweise): je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe
-  sind immer zusammen auf dem gleichen Posten; Posten mit 2 Personen bekommen ein Team, einzelne Plätze eine
-  Einzelperson
+- **Zweierteams** (wahlweise): je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe
+  sind wenn möglich zusammen auf dem gleichen Posten. Gehen die Leute nicht auf, verteilt sich ein Team auf
+  zwei einzelne Posten (z. B. beide Zuko), und wer übrig bleibt, bildet für eine Ablösung mit jemand anderem
+  ein Paar
 - **Gesunderhaltung**: niemand ist länger als eingestellt (z. B. 2 Stunden) am Stück draussen; bei längeren
   Ablöseblöcken tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis
 - **Essenszeiten**: jede Person, die das ganze Fenster im Dienst ist, bekommt eine Essensstunde auf einem
@@ -96,6 +97,15 @@ Administratorrechte:
 - Startmenü-Eintrag (Windows-Suche)
 - Dateizuordnung für `.shiftdesk`
 - Eintrag unter *Einstellungen → Apps* zum Deinstallieren (`ShiftDesk.exe /uninstall`)
+
+Damit auf dem PC nur eine Version liegt (und die Windows-Suche nur eine findet), räumt ShiftDesk
+liegengebliebene Kopien weg: `ShiftDesk*.exe` in Downloads, auf dem Desktop und in Dokumente (bis zwei
+Ordner tief), die nicht neuer sind als die installierte Version, beim Installieren und bei jedem Start der
+installierten Version. Ein entpackter Ordner, in dem danach nur noch die `Anleitung.txt` liegt, verschwindet mit;
+eine exe direkt auf dem Desktop wird durch eine Verknüpfung ersetzt; Zip-Dateien bleiben liegen. Startet man eine
+Kopie, obwohl dieselbe oder eine neuere Version installiert ist, öffnet sich die installierte Version, und die
+Kopie wird danach gelöscht (`ShiftDesk.exe /entfernen "<Pfad>"`). Kopien ausserhalb dieser Ordner (z. B. auf
+einem USB-Stick) laufen bei gleicher Version weiter selbst.
 
 Die zuletzt verwendeten Eingaben liegen unter `%APPDATA%\ShiftDesk\letzte.xml`.
 

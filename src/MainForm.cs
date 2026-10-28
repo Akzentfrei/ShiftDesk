@@ -41,7 +41,7 @@ namespace ShiftDesk
         // Index = erlaubte Stunden am Stück draussen, 0 = keine Grenze
         static readonly string[] DraussenListe = { "Keine Grenze", "Höchstens 1 Stunde", "Höchstens 2 Stunden", "Höchstens 3 Stunden", "Höchstens 4 Stunden", "Höchstens 6 Stunden" };
         static readonly int[] DraussenStunden = { 0, 1, 2, 3, 4, 6 };
-        static readonly string[] TeamListe = { "Keine festen Teams", "Feste Zweierteams" };
+        static readonly string[] TeamListe = { "Keine Teams", "Zweierteams" };
 
         string dateiPfad;
         Plan plan;
@@ -428,6 +428,7 @@ namespace ShiftDesk
         void Installieren()
         {
             if (!Installation.Installieren(false)) return;
+            Installation.BeimBeendenWegraeumen();
             dateiBefehle.RemoveAll(b => b.Item2 == "download");
             var eintrag = seitenleisteUnten.OfType<NavEintrag>().FirstOrDefault(n => n.Icon == "download");
             if (eintrag != null)
@@ -639,7 +640,7 @@ namespace ShiftDesk
             t.Erklaeren("Fahrer", "Fahrer haben im Plan nur den Posten vom Typ «Fahrer» (z. B. Presto) und Ruhezeit, sonst nichts, auch keine Essensstunde: sie essen in der Ruhezeit. Im Plan sind sie mit einem Auto markiert.");
             t.LeerHinweis = new[] { "users", "Noch keine Personen", "Mit «Person hinzufügen» oben rechts die Wache erfassen." };
             return NeueSeite("Personen",
-                "Alle Personen der Wache. Die Reihenfolge änderst du mit den Pfeilen. Bei «Feste Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das immer zusammen eingeteilt wird.",
+                "Alle Personen der Wache. Die Reihenfolge änderst du mit den Pfeilen. Bei «Zweierteams» (Plan-Seite) bilden je zwei aufeinanderfolgende Personen mit gleicher Funktion und Gruppe ein Team, das wenn möglich zusammen eingeteilt wird.",
                 t.Karte,
                 Knopf("Person hinzufügen", "plus", NeuePerson, true));
         }
@@ -768,7 +769,8 @@ namespace ShiftDesk
             felder.Controls.Add(Feld("Am Stück draussen", draussen,
                 "So lange bleibt höchstens jemand am Stück auf Posten im Freien (Schalter «Draussen» bei den Posten). Bei längeren Ablösungen tauscht der Planer mitten im Block mit jemandem von drinnen, sonst gibt es einen Hinweis."));
             felder.Controls.Add(Feld("Teams", teams,
-                "«Feste Zweierteams»: je zwei aufeinanderfolgende Personen der Personen-Tabelle mit gleicher Funktion und Gruppe sind immer zusammen auf dem gleichen Posten. Posten mit 2 Plätzen bekommen ein Team, einzelne Plätze eine Einzelperson."));
+                "«Zweierteams»: je zwei aufeinanderfolgende Personen der Personen-Tabelle mit gleicher Funktion und Gruppe sind wenn möglich zusammen auf dem gleichen Posten. " +
+                "Gehen die Leute nicht auf, verteilt sich ein Team auf zwei einzelne Posten (z. B. beide Zuko), und wer übrig bleibt, bildet für eine Ablösung mit jemand anderem ein Paar, damit auch er auf Posten für zwei kommt."));
             abschnitt("Ausdruck");
             felder.Controls.Add(Feld("Name", txtName,
                 "Steht auf dem Ausdruck bei «Für». Ändert den Plan nicht und ist sofort in der Vorschau zu sehen."));
