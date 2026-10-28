@@ -1,30 +1,28 @@
 ﻿using System;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-
-[assembly: AssemblyTitle("ShiftDesk")]
-[assembly: AssemblyProduct("ShiftDesk")]
-[assembly: AssemblyDescription("Ablöseplanung")]
-[assembly: AssemblyCompany("ShiftDesk")]
-[assembly: AssemblyCopyright("© 2026 Ronny Riner")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+using ShiftDesk.Einrichtung;
+using ShiftDesk.Oberflaeche;
 
 namespace ShiftDesk
 {
+    /// <summary>Einstieg: wertet die Befehlszeile aus und öffnet das Hauptfenster.</summary>
+    /// <remarks>
+    /// <list type="table">
+    /// <item><term><c>ShiftDesk.exe</c></term><description>beim ersten Start aus Downloads/Zip wird die Installation angeboten</description></item>
+    /// <item><term><c>ShiftDesk.exe "Plan.shiftdesk"</c></term><description>öffnet die Datei (Doppelklick im Explorer)</description></item>
+    /// <item><term><c>/portable</c></term><description>startet ohne das Angebot zu installieren</description></item>
+    /// <item><term><c>/install [/quiet]</c></term><description>installiert für den aktuellen Benutzer</description></item>
+    /// <item><term><c>/uninstall [/quiet]</c></term><description>deinstalliert wieder</description></item>
+    /// <item><term><c>/entfernen "Pfad" [/quiet]</c></term><description>löscht die Kopie in Downloads usw., die diese Version gestartet hat</description></item>
+    /// </list>
+    /// </remarks>
     static class Program
     {
         [DllImport("user32.dll")]
         static extern bool SetProcessDPIAware();
 
-        // ShiftDesk.exe                      beim ersten Start aus Downloads/Zip wird die Installation angeboten
-        // ShiftDesk.exe /portable            startet ohne dieses Angebot
-        // ShiftDesk.exe /install [/quiet]    installiert für den aktuellen Benutzer
-        // ShiftDesk.exe /uninstall [/quiet]  deinstalliert wieder
-        // ShiftDesk.exe "Plan.shiftdesk"     öffnet die Datei (Doppelklick im Explorer)
-        // ShiftDesk.exe /entfernen "Pfad" [/quiet]  löscht die Kopie in Downloads usw., die diese Version gestartet hat
         [STAThread]
         static void Main(string[] args)
         {
@@ -37,7 +35,7 @@ namespace ShiftDesk
             int entfernen = a.IndexOf(Installation.EntfernenSchalter);
             if (entfernen >= 0 && entfernen + 1 < args.Length)
             {
-                Installation.KopieEntfernen(args[entfernen + 1], leise);
+                KopienAufraeumen.KopieEntfernen(args[entfernen + 1], leise);
                 if (leise) return;
                 args = args.Where((x, i) => i != entfernen && i != entfernen + 1).ToArray();
             }
@@ -56,7 +54,7 @@ namespace ShiftDesk
             // und auf dem PC soll nur die neueste Version liegen
             if (!a.Contains("/portable") && Installation.BeimStart(datei))
                 return;
-            Application.Run(new MainForm(datei));
+            Application.Run(new Hauptfenster(datei));
         }
     }
 }

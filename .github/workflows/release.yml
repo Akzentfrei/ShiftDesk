@@ -1,6 +1,6 @@
 # Baut ShiftDesk.exe auf GitHub und hängt sie an ein Release, sobald eine Versionsmarke gepusht wird
-# (z. B. git tag v1.2.0 && git push origin v1.2.0). Die Marke muss zur Version in src/Program.cs passen.
-# Von Hand («Run workflow» unter Actions): Release zur Version aus src/Program.cs.
+# (z. B. git tag v1.2.0 && git push origin v1.2.0). Die Marke muss zur Version in src/AssemblyInfo.cs passen.
+# Von Hand («Run workflow» unter Actions): Release zur Version aus src/AssemblyInfo.cs.
 name: Release
 
 on:
@@ -25,7 +25,7 @@ jobs:
         shell: pwsh
         run: |
           $v = (Get-Item ShiftDesk.exe).VersionInfo.FileVersion -replace '\.0$', ''
-          if ("${{ github.ref_type }}" -eq "tag" -and "v$v" -ne "${{ github.ref_name }}") { throw "Version $v in src/Program.cs passt nicht zur Marke ${{ github.ref_name }}" }
+          if ("${{ github.ref_type }}" -eq "tag" -and "v$v" -ne "${{ github.ref_name }}") { throw "Version $v in src/AssemblyInfo.cs passt nicht zur Marke ${{ github.ref_name }}" }
           Copy-Item "ShiftDesk-$v.zip" ShiftDesk.zip
           "MARKE=v$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 

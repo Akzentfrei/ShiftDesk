@@ -71,10 +71,10 @@ release.bat
 
 baut die exe und packt sie mit `Anleitung.txt` in `ShiftDesk-<Version>.zip`. Diese Zip-Datei kann man
 verschicken (Mail-Anbieter blockieren oft .exe-Anhänge, auch in Zips; dann per OneDrive, Google Drive,
-WeTransfer o. ä. teilen). Vor jeder Weitergabe die Version in `src/Program.cs` erhöhen, damit die bereits
+WeTransfer o. ä. teilen). Vor jeder Weitergabe die Version in `src/AssemblyInfo.cs` erhöhen, damit die bereits
 installierte Version die Aktualisierung anbietet.
 
-Auf GitHub veröffentlichen: Version in `src/Program.cs` erhöhen, committen und eine passende Marke pushen,
+Auf GitHub veröffentlichen: Version in `src/AssemblyInfo.cs` erhöhen, committen und eine passende Marke pushen,
 z. B. `git tag v1.2.0` und `git push origin main v1.2.0` (oder auf GitHub unter Actions → Release → «Run workflow»). Die GitHub Action (`.github/workflows/release.yml`)
 baut dann die exe und hängt `ShiftDesk.zip` und `ShiftDesk.exe` an ein neues Release; der Download-Link oben
 zeigt immer auf die neueste Version.
@@ -111,20 +111,36 @@ Die zuletzt verwendeten Eingaben liegen unter `%APPDATA%\ShiftDesk\letzte.xml`.
 
 ## Aufbau
 
-| Datei | Inhalt |
-|---|---|
-| `src/Model.cs` | Datenmodell und Beispieldaten |
-| `src/Planer.cs` | Einteilung (Ruhezeiten, Ablösung, Essen, faire Verteilung) |
-| `src/Zeichner.cs` | Plan-Seite für Vorschau, Druck und PDF |
-| `src/ExcelExport.cs` | Excel-Export (Office Open XML, ohne Zusatzbibliotheken) |
-| `src/MainForm.cs` | Hauptfenster |
-| `src/TabellenEditor.cs` | Bearbeitbare Tabellenfelder |
-| `src/Steuerelemente.cs`, `src/Popups.cs` | Eigene Steuerelemente, Aufklapplisten, Farbwähler und Tooltips |
-| `src/Theme.cs` | Farben hell/dunkel |
-| `src/Lucide.cs`, `src/LucideDaten.cs` | Icon-Zeichner und eingebettete Icons |
-| `src/Installation.cs` | Installieren / Aktualisieren / Deinstallieren |
-| `src/Dialoge.cs` | Rückfragen (Gefahr rot, Vorschlag blau) und Meldungen (Info, Erfolg, Warnung, Fehler) |
-| `release.bat`, `Anleitung.txt` | Zip zum Weitergeben |
+C# 5 mit Windows Forms (.NET Framework 4), ohne Zusatzbibliotheken. Jeder Ordner unter `src` ist ein
+Namensraum; die Klassen sind mit XML-Doku-Kommentaren (`///`) beschrieben.
+
+```
+src/
+├─ Program.cs               Einstieg, Befehlszeile (/install, /uninstall, /portable …)
+├─ AssemblyInfo.cs          Name und Version der exe
+├─ Speicherorte.cs          Wo ShiftDesk seine Daten ablegt (%APPDATA%\ShiftDesk)
+├─ Modell/                  Eingaben: Konfiguration, Person, Gruppe, Posten, Funktion, Essenszeit,
+│                           Vorlagen (Neu, Beispiel) und KonfigurationsDatei (Laden, Speichern, ältere Versionen)
+├─ Planung/                 Planer (Ablauf über alle Stunden), Planer.Zuteilung (eine Stunde: Zweierteams,
+│                           Kosten), UngarischeMethode, Plan (das Ergebnis)
+├─ Ausgabe/                 PlanZeichner (Druckseite für Vorschau, Drucker und PDF), DruckSprache (de/fr/it/en),
+│                           PlanDruck, ExcelExport (Office Open XML)
+├─ Einrichtung/             Installation, KopienAufraeumen (alte Kopien in Downloads usw.), Windowseintraege
+└─ Oberflaeche/             Hauptfenster, Seitenleiste, FensterZustand
+   ├─ Seiten/               Eine Klasse pro Seite (Personen, Posten, Plan …); die Plan-Seite mit
+   │                        PlanEinstellungen, PlanWerkzeugleiste, PlanVorschau und PlanAusgabe
+   ├─ Tabellen/             Tabelle im eigenen Design (Aufbau, Zeichnen, Bearbeiten, Zeilen) und SpaltenInfo
+   ├─ Steuerelemente/       Selbst gezeichnete Knöpfe, Felder, Karten, Datumsfeld, Übergang …
+   ├─ Popups/               Aufklapplisten, Farbwähler, Kalender, Info- und Hinweis-Popups, Kurzinfos
+   ├─ Dialoge/              Rückfragen (Gefahr rot, Vorschlag blau) und Meldungen
+   └─ Design/               Thema (Farben hell/dunkel), Schrift, Formen, Lucide-Icons, Farbwechsel
+```
+
+Der Weg der Daten: Die Seiten zeigen eine `Konfiguration` an und schreiben sie zurück
+(`Seite.Anzeigen` / `Seite.Uebernehmen`). «Plan erstellen» gibt sie dem `Planer`, der daraus einen `Plan`
+macht; `PlanZeichner` und `ExcelExport` geben diesen aus.
+
+`release.bat` und `Anleitung.txt` ergeben die Zip-Datei zum Weitergeben.
 
 ## Lizenzen
 
