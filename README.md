@@ -6,9 +6,9 @@ gibt den Plan als Ausdruck, PDF oder Excel-Datei aus.
 
 ## Download
 
-**[ShiftDesk.zip herunterladen](https://github.com/Akzentfrei/ShiftDesk/releases/latest/download/ShiftDesk.zip)**
+**[ShiftDesk.zip herunterladen](https://github.com/Riner-Software/ShiftDesk/releases/latest/download/ShiftDesk.zip)**
 (neueste Version), entpacken und `ShiftDesk.exe` starten. Die beiliegende `Anleitung.txt` erklärt die
-Installation; alle Versionen stehen unter [Releases](https://github.com/Akzentfrei/ShiftDesk/releases).
+Installation; alle Versionen stehen unter [Releases](https://github.com/Riner-Software/ShiftDesk/releases).
 
 ## Funktionen
 
